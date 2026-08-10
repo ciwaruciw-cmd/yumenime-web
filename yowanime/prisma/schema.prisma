@@ -1,0 +1,129 @@
+// Prisma Schema for PostgreSQL
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String      @id @default(uuid())
+  username     String      @unique
+  email        String      @unique
+  passwordHash String      @map("password_hash")
+  avatarUrl    String?     @map("avatar_url")
+  role         String      @default("user")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+  watchlists   Watchlist[]
+  comments     Comment[]
+
+  @@map("users")
+}
+
+model Anime {
+  id            String        @id
+  malId         Int?          @unique @map("mal_id")
+  slug          String        @unique
+  title         String
+  titleEnglish  String?       @map("title_english")
+  titleJapanese String?       @map("title_japanese")
+  synopsis      String?
+  synopsisShort String?       @map("synopsis_short")
+  poster        String
+  banner        String?
+  status        String        @default("completed")
+  type          String        @default("TV")
+  year          Int           @default(2024)
+  season        String        @default("Spring")
+  studio        String?
+  rating        String        @default("PG-13")
+  score         Float         @default(7.50)
+  episodes      Int           @default(12)
+  duration      Int           @default(24)
+  isFeatured    Boolean       @default(false) @map("is_featured")
+  isTrending    Boolean       @default(false) @map("is_trending")
+  isNewUpdate   Boolean       @default(false) @map("is_new_update")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  animeGenres   AnimeGenre[]
+  episodesList  Episode[]
+  watchlists    Watchlist[]
+  comments      Comment[]
+
+  @@map("animes")
+}
+
+model Genre {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  animeGenres AnimeGenre[]
+
+  @@map("genres")
+}
+
+model AnimeGenre {
+  animeId String @map("anime_id")
+  genreId Int    @map("genre_id")
+  anime   Anime  @relation(fields: [animeId], references: [id], onDelete: Cascade)
+  genre   Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([animeId, genreId])
+  @@map("anime_genres")
+}
+
+model Episode {
+  id            String        @id
+  animeId       String        @map("anime_id")
+  episodeNumber Int           @map("episode_number")
+  title         String
+  thumbnail     String?
+  duration      Int           @default(1440)
+  airedDate     DateTime?     @map("aired_date")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  anime         Anime         @relation(fields: [animeId], references: [id], onDelete: Cascade)
+  sources       VideoSource[]
+  comments      Comment[]
+
+  @@map("episodes")
+}
+
+model VideoSource {
+  id        Int     @id @default(autoincrement())
+  episodeId String  @map("episode_id")
+  quality   String
+  url       String
+  episode   Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@map("video_sources")
+}
+
+model Watchlist {
+  id             Int      @id @default(autoincrement())
+  userId         String   @map("user_id")
+  animeId        String   @map("anime_id")
+  status         String   @default("watching")
+  currentEpisode Int      @default(0) @map("current_episode")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  anime          Anime    @relation(fields: [animeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, animeId])
+  @@map("watchlists")
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  userId    String   @map("user_id")
+  animeId   String   @map("anime_id")
+  episodeId String?  @map("episode_id")
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  anime     Anime    @relation(fields: [animeId], references: [id], onDelete: Cascade)
+  episode   Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@map("comments")
+}

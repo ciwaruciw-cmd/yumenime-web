@@ -1,0 +1,251 @@
+/* ============================================================
+   globals.css — Yumenime Design System
+   Token source: DESIGN-x.ai.md (xAI-inspired dark canvas)
+   ============================================================ */
+
+@import "tailwindcss";
+
+/* ── Tailwind v4 CSS-based theme configuration ── */
+@theme {
+  /* Color Tokens */
+  --color-canvas:         #0a0a0a;
+  --color-canvas-soft:    #1a1c20;
+  --color-canvas-card:    #191919;
+  --color-canvas-mid:     #363a3f;
+  --color-hairline:       transparent;
+  --color-ink:            #ffffff;
+  --color-ink-hover:      #fafaf7;
+  --color-body:           #dadbdf;
+  --color-body-mid:       #7d8187;
+  --color-mute:           #7d8187;
+
+  /* Accent colors */
+  --color-sunset:         #ff7a17;
+  --color-sunset-soft:    #ffc285;
+  --color-dusk:           #7c3aed;
+  --color-twilight:       #c4b5fd;
+  --color-breeze:         #a0c3ec;
+  --color-midnight:       #0d1726;
+
+  /* Typography */
+  --font-display:   "Inter", system-ui, -apple-system, sans-serif;
+  --font-mono:      ui-monospace, "SFMono-Regular", "Cascadia Code", "Roboto Mono", Menlo, Consolas, monospace;
+
+  /* Font Sizes (design scale) */
+  --font-size-display-xl: 96px;
+  --font-size-display-lg: 72px;
+  --font-size-display-md: 48px;
+  --font-size-display-sm: 32px;
+  --font-size-display-xs: 20px;
+  --font-size-body-lg:    18px;
+  --font-size-body-md:    16px;
+  --font-size-body-sm:    14px;
+  --font-size-caption:    14px;
+  --font-size-caption-sm: 12px;
+
+  /* Border Radius */
+  --radius-card: 8px;
+  --radius-pill: 9999px;
+
+  /* Base Spacing Unit (4px) */
+  --spacing: 0.25rem;
+}
+
+/* ── Base Reset & Defaults ── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: var(--font-size-body-md);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+/* ── Custom Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-canvas-soft);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-canvas-mid);
+  border-radius: var(--radius-pill);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-body-mid);
+}
+
+/* ── Typography Utility Classes (design tokens) ── */
+.display-xl {
+  font-family: var(--font-display);
+  font-size: clamp(2.25rem, 5vw, 56px);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+}
+
+.display-lg {
+  font-family: var(--font-display);
+  font-size: clamp(1.875rem, 4vw, 44px);
+  font-weight: 400;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+}
+
+.display-md {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 3vw, 36px);
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -0.025em;
+}
+
+.display-sm {
+  font-family: var(--font-display);
+  font-size: clamp(1.25rem, 2.5vw, 28px);
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: -0.019em;
+}
+
+.display-xs {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.eyebrow-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.333;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-body-mid);
+}
+
+.caption-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ── Anime card hover gradient overlay ── */
+.card-overlay {
+  background: linear-gradient(
+    to top,
+    rgba(10, 10, 10, 0.95) 0%,
+    rgba(10, 10, 10, 0.6) 50%,
+    rgba(10, 10, 10, 0) 100%
+  );
+}
+
+/* ── Hero gradient overlay ── */
+.hero-overlay {
+  background: linear-gradient(
+    105deg,
+    rgba(10, 10, 10, 0.95) 0%,
+    rgba(10, 10, 10, 0.7) 50%,
+    rgba(10, 10, 10, 0.1) 100%
+  );
+}
+
+/* ── Skeleton shimmer animation ── */
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-canvas-soft) 25%,
+    var(--color-canvas-mid)  50%,
+    var(--color-canvas-soft) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease infinite;
+}
+
+/* ── Fade-in animation ── */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease forwards;
+}
+
+/* ── Video player custom styles ── */
+.video-player-wrapper {
+  position: relative;
+  width: 100%;
+  background: #000;
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+
+/* ── Horizontal scroll section ── */
+.scroll-x {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  -ms-overflow-style: none;
+}
+.scroll-x::-webkit-scrollbar {
+  height: 3px;
+}
+
+/* ── Hairline divider ── */
+.hairline {
+  display: none;
+  border: none;
+}
+
+/* ── Pill button translucent border ── */
+.btn-outline-translucent {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.btn-outline-translucent:hover {
+  border-color: rgba(255, 255, 255, 0.4);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* ── Genre pill hover ── */
+.genre-pill:hover {
+  background-color: var(--color-canvas-soft);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* ── Page transition ── */
+.page-enter {
+  animation: fadeInUp 0.3s ease forwards;
+}
+
+/* ── Focus outline (accessibility) ── */
+:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: 2px;
+}
