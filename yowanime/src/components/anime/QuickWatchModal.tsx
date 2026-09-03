@@ -55,7 +55,7 @@ export function QuickWatchModal({
     >
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/80 backdrop-blur-md animate-fade-in-up"
+        className="fixed inset-0 bg-black/85 animate-fade-in"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -74,7 +74,7 @@ export function QuickWatchModal({
             variant="ghost"
             size="sm"
             onClick={onClose}
-            aria-label="Tutup pemutar video"
+            aria-label="Close video player"
             className="shrink-0 p-1.5 h-auto rounded-full"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -88,7 +88,7 @@ export function QuickWatchModal({
           {/* Episode List Playlist (LEFT SIDE on desktop) */}
           <div className="order-2 lg:order-1 bg-canvas border border-hairline rounded-[8px] p-3 flex flex-col h-[280px] lg:h-auto overflow-hidden">
             <div className="flex items-center justify-between pb-2 mb-2 border-b border-hairline shrink-0">
-              <span className="eyebrow-mono text-mute">DAFTAR EPISODE</span>
+              <span className="eyebrow-mono text-mute">EPISODE LIST</span>
               <span className="text-xs text-mute font-mono">{episodes.length} EP</span>
             </div>
             <div className="overflow-y-auto flex-1 space-y-1">

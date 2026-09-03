@@ -127,3 +127,14 @@ model Comment {
 
   @@map("comments")
 }
+
+model Notification {
+  id        String   @id @default(uuid())
+  type      String   @default("info")
+  title     String
+  message   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("notifications")
+}
+

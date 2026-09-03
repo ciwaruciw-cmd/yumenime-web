@@ -49,6 +49,7 @@ export interface Anime {
   id: string;
   slug: string;
   title: string;
+  titleRomaji?: string;
   titleEnglish?: string;
   titleJapanese?: string;
   synopsis: string;

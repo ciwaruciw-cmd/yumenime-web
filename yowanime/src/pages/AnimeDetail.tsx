@@ -51,9 +51,9 @@ export default function AnimeDetail() {
             <circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" strokeLinecap="round" />
           </svg>
         </div>
-        <p className="text-body text-sm font-display mb-4">{error ?? 'Anime tidak ditemukan.'}</p>
+        <p className="text-body text-sm font-display mb-4">{error ?? 'Anime not found.'}</p>
         <Link to="/anime">
-          <Button variant="outline">← Kembali ke Daftar</Button>
+          <Button variant="outline">← Back to List</Button>
         </Link>
       </div>
     );
@@ -61,8 +61,8 @@ export default function AnimeDetail() {
 
   const statusLabels: Record<string, string> = {
     ongoing: 'Ongoing',
-    completed: 'Selesai',
-    upcoming: 'Segera Tayang',
+    completed: 'Completed',
+    upcoming: 'Upcoming',
   };
 
   return (
@@ -125,8 +125,8 @@ export default function AnimeDetail() {
                     18+
                   </div>
                   <div>
-                    <p className="text-xs font-display text-red-400 font-semibold">Peringatan Konten Dewasa (18+)</p>
-                    <p className="text-[11px] text-mute font-display">Anime ini mengandung unsur khusus penonton dewasa (18+ / Hentai).</p>
+                    <p className="text-xs font-display text-red-400 font-semibold">Adult Content Warning (18+)</p>
+                    <p className="text-[11px] text-mute font-display">This anime contains explicit themes intended for mature audiences (18+ / Hentai).</p>
                   </div>
                 </div>
               )}
@@ -154,10 +154,10 @@ export default function AnimeDetail() {
               <div className="grid grid-cols-3 gap-y-4 gap-x-6 max-w-xl pt-2">
                 {[
                   { label: 'STUDIO', value: anime.studio },
-                  { label: 'TAHUN', value: `${anime.season} ${anime.year}` },
-                  { label: 'EPISODE', value: anime.episodes > 0 ? `${anime.episodes} ep` : 'Ongoing' },
-                  { label: 'DURASI', value: formatMinutes(anime.duration) },
-                  { label: 'TERAKHIR UPDATE', value: formatDate(anime.updatedAt) },
+                  { label: 'SEASON / YEAR', value: `${anime.season} ${anime.year}` },
+                  { label: 'EPISODES', value: anime.episodes > 0 ? `${anime.episodes} ep` : 'Ongoing' },
+                  { label: 'DURATION', value: formatMinutes(anime.duration) },
+                  { label: 'LAST UPDATED', value: formatDate(anime.updatedAt) },
                 ].map((item) => (
                   <div key={item.label}>
                     <p className="eyebrow-mono text-mute text-[10px] tracking-wider mb-1">{item.label}</p>
@@ -184,12 +184,12 @@ export default function AnimeDetail() {
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
                       <polygon points="5 3 19 12 5 21 5 3" />
                     </svg>
-                    <span>Tonton Episode 1</span>
+                    <span>Watch Episode 1</span>
                   </button>
                 </Link>
                 <button
                   onClick={() => toggle(anime)}
-                  className="bg-black/40 border border-white/20 text-white hover:bg-white/10 font-medium text-xs sm:text-sm rounded-full px-6 py-2.5 inline-flex items-center gap-2 backdrop-blur-sm transition-colors cursor-pointer"
+                  className="bg-canvas-card border border-white/20 text-white hover:bg-white/10 font-medium text-xs sm:text-sm rounded-full px-6 py-2.5 inline-flex items-center gap-2 transition-colors cursor-pointer"
                 >
                   {inWatchlist ? (
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
@@ -200,13 +200,13 @@ export default function AnimeDetail() {
                       <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   )}
-                  <span>{inWatchlist ? 'Tersimpan' : 'Watchlist'}</span>
+                  <span>{inWatchlist ? 'Saved' : 'Watchlist'}</span>
                 </button>
               </div>
 
               {/* Synopsis */}
               <div className="max-w-3xl pt-2">
-                <p className="eyebrow-mono text-mute text-[10px] tracking-wider mb-1">SINOPSIS</p>
+                <p className="eyebrow-mono text-mute text-[10px] tracking-wider mb-1">SYNOPSIS</p>
                 <p
                   className={`text-body text-xs sm:text-sm font-display leading-relaxed ${
                     !synopsisExpanded ? 'line-clamp-3' : ''
@@ -219,7 +219,7 @@ export default function AnimeDetail() {
                     onClick={() => setSynopsisExpanded((v) => !v)}
                     className="text-sunset text-xs font-display mt-1 hover:underline cursor-pointer"
                   >
-                    {synopsisExpanded ? 'Tampilkan lebih sedikit' : 'Baca selengkapnya'}
+                    {synopsisExpanded ? 'Show less' : 'Read more'}
                   </button>
                 )}
               </div>
@@ -232,9 +232,9 @@ export default function AnimeDetail() {
       <div className="max-w-[1280px] mx-auto px-6 py-10 space-y-12">
         {/* Episode List */}
         <div>
-          <span className="eyebrow-mono text-mute block mb-1">EPISODE</span>
+          <span className="eyebrow-mono text-mute block mb-1">EPISODES</span>
           <h2 className="display-sm text-ink mb-4">
-            Daftar Episode
+            Episode List
             {episodes.length > 0 && (
               <span className="text-body-mid text-base ml-2 font-normal">({episodes.length})</span>
             )}
@@ -250,8 +250,8 @@ export default function AnimeDetail() {
         {/* Recommendations */}
         {recommended.length > 0 && (
           <AnimeSection
-            eyebrow="REKOMENDASI"
-            title="Anime Serupa"
+            eyebrow="RECOMMENDED"
+            title="Similar Anime"
             animes={recommended}
             viewAllHref={`/anime?genre=${encodeURIComponent(anime.genres[0])}`}
             className="!px-0"

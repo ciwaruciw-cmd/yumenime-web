@@ -1,25 +1,26 @@
-import { useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useMemo, useState, useEffect } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { AnimeGrid } from '@/components/anime/AnimeGrid';
 import { GenreFilter } from '@/components/anime/GenreFilter';
 import { Button } from '@/components/ui/Button';
 import { useAnimeList } from '@/hooks/useAnimeList';
+import { AgeVerificationModal } from '@/components/common/AgeVerificationModal';
 import type { AnimeFilterParams, AnimeStatus } from '@/types/anime';
 
 const STATUS_OPTIONS: { label: string; value: AnimeStatus | '' }[] = [
-  { label: 'Semua', value: '' },
+  { label: 'All', value: '' },
   { label: 'Ongoing', value: 'ongoing' },
-  { label: 'Selesai', value: 'completed' },
-  { label: 'Segera', value: 'upcoming' },
+  { label: 'Completed', value: 'completed' },
+  { label: 'Upcoming', value: 'upcoming' },
 ];
 
 const YEAR_OPTIONS = [2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015];
 
 const SORT_OPTIONS: { label: string; value: AnimeFilterParams['sort'] }[] = [
-  { label: 'Terbaru', value: 'latest' },
-  { label: 'Populer', value: 'popular' },
+  { label: 'Latest', value: 'latest' },
+  { label: 'Popular', value: 'popular' },
   { label: 'Rating', value: 'score' },
-  { label: 'Judul', value: 'title' },
+  { label: 'Title', value: 'title' },
 ];
 
 /**
@@ -28,11 +29,22 @@ const SORT_OPTIONS: { label: string; value: AnimeFilterParams['sort'] }[] = [
  */
 export default function AnimeList() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const [showAgeModal, setShowAgeModal] = useState(false);
 
   const genre = searchParams.get('genre') ?? undefined;
   const status = (searchParams.get('status') ?? undefined) as AnimeStatus | undefined;
   const year = searchParams.get('year') ? Number(searchParams.get('year')) : undefined;
   const sort = (searchParams.get('sort') ?? 'latest') as AnimeFilterParams['sort'];
+
+  useEffect(() => {
+    if (genre?.toLowerCase() === 'hentai') {
+      const isVerified = sessionStorage.getItem('age_verified_18') === 'true';
+      if (!isVerified) {
+        setShowAgeModal(true);
+      }
+    }
+  }, [genre]);
 
   const filters = useMemo(
     () => ({
@@ -57,13 +69,23 @@ export default function AnimeList() {
     setSearchParams(params);
   };
 
+  const handleConfirmAge = () => {
+    sessionStorage.setItem('age_verified_18', 'true');
+    setShowAgeModal(false);
+  };
+
+  const handleCancelAge = () => {
+    setShowAgeModal(false);
+    updateParam('genre', undefined);
+  };
+
   return (
     <div className="page-enter pt-20">
       <div className="max-w-[1280px] mx-auto px-6">
         {/* Page header */}
         <div className="mb-6">
           <span className="eyebrow-mono text-mute block mb-1">BROWSE</span>
-          <h1 className="display-md text-ink">Daftar Anime</h1>
+          <h1 className="display-md text-ink">Anime Directory</h1>
         </div>
 
         {/* Genre filter */}
@@ -92,9 +114,9 @@ export default function AnimeList() {
             value={year ?? ''}
             onChange={(e) => updateParam('year', e.target.value || undefined)}
             className="bg-canvas-soft text-body text-xs font-mono border border-hairline rounded-full px-3 py-1.5 outline-none focus:border-white/30 cursor-pointer"
-            aria-label="Filter tahun"
+            aria-label="Filter by year"
           >
-            <option value="">Semua Tahun</option>
+            <option value="">All Years</option>
             {YEAR_OPTIONS.map((y) => (
               <option key={y} value={y}>{y}</option>
             ))}
@@ -102,7 +124,7 @@ export default function AnimeList() {
 
           {/* Sort */}
           <div className="flex items-center gap-1.5 ml-auto">
-            <span className="text-xs text-mute font-mono">URUTKAN:</span>
+            <span className="text-xs text-mute font-mono">SORT BY:</span>
             {SORT_OPTIONS.map((opt) => (
               <Button
                 key={opt.value}
@@ -122,9 +144,16 @@ export default function AnimeList() {
           isLoading={isLoading}
           hasMore={hasMore}
           onLoadMore={loadMore}
-          emptyMessage="Tidak ada anime yang cocok dengan filter."
+          emptyMessage="No anime matched the selected filters."
         />
       </div>
+
+      {/* 18+ Age Verification Warning Alert Modal */}
+      <AgeVerificationModal
+        isOpen={showAgeModal}
+        onConfirm={handleConfirmAge}
+        onCancel={handleCancelAge}
+      />
     </div>
   );
 }

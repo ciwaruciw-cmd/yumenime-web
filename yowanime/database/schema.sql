@@ -110,6 +110,15 @@ CREATE TABLE comments (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- 9. NOTIFICATIONS TABLE
+CREATE TABLE notifications (
+    id VARCHAR(64) PRIMARY KEY,
+    type VARCHAR(20) DEFAULT 'info',
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ============================================================
 -- INDEXES FOR HIGH PERFORMANCE QUERIES
 -- ============================================================

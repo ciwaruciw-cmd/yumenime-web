@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { User, LoginPayload, RegisterPayload, FavoriteCharacter } from '@/types/user';
 import { loginApi, registerApi } from '@/services/authService';
-import { isAdminEmail } from '@/config/adminConfig';
 
 export const DEFAULT_FAVORITE_CHARACTERS: FavoriteCharacter[] = [
   {
@@ -11,7 +10,7 @@ export const DEFAULT_FAVORITE_CHARACTERS: FavoriteCharacter[] = [
     animeName: 'Jujutsu Kaisen',
     role: 'Main Character',
     image: 'https://s4.anilist.co/file/anilistcdn/character/large/b126446-TwtlBtf95t62.png',
-    description: 'Penyihir Jujutsu paling sakti dengan teknik Limitless dan Six Eyes.',
+    description: 'The strongest Jujutsu Sorcerer wielding the Limitless and Six Eyes techniques.',
   },
   {
     id: 'char-2',
@@ -19,7 +18,7 @@ export const DEFAULT_FAVORITE_CHARACTERS: FavoriteCharacter[] = [
     animeName: 'Attack on Titan',
     role: 'Main Character',
     image: 'https://s4.anilist.co/file/anilistcdn/character/large/b40882-dsj7IP943WFF.jpg',
-    description: 'Pemegang kekuatan Attack Titan yang terus maju demi kebebasan.',
+    description: 'Wielder of the Attack Titan moving forward for freedom.',
   },
   {
     id: 'char-3',
@@ -27,9 +26,29 @@ export const DEFAULT_FAVORITE_CHARACTERS: FavoriteCharacter[] = [
     animeName: 'One Piece',
     role: 'Main Character',
     image: 'https://s4.anilist.co/file/anilistcdn/character/large/b40-T4sF1a94Xm36.png',
-    description: 'Kapten Topi Jerami bertekad menjadi Raja Bajak Laut!',
+    description: 'Straw Hat Captain determined to become the King of the Pirates!',
   },
 ];
+
+// ── Helpers to persist favorite characters per-user in localStorage ──
+const FAVS_PREFIX = 'yowanime_favchars_';
+
+function saveFavoritesToStorage(email: string, chars: FavoriteCharacter[]): void {
+  try {
+    localStorage.setItem(FAVS_PREFIX + email.toLowerCase(), JSON.stringify(chars));
+  } catch { /* quota exceeded or unavailable */ }
+}
+
+function loadFavoritesFromStorage(email: string): FavoriteCharacter[] | null {
+  try {
+    const raw = localStorage.getItem(FAVS_PREFIX + email.toLowerCase());
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch { /* corrupted */ }
+  return null;
+}
 
 interface AuthStore {
   user: User | null;
@@ -48,45 +67,11 @@ interface AuthStore {
 }
 
 const performLogin = async (payload: LoginPayload): Promise<{ user: User; token: string }> => {
-  try {
-    const res = await loginApi(payload);
-    return res;
-  } catch (err) {
-    // If backend isn't running, fallback to dev mock
-    if (payload.email === 'test@test.com' && payload.password === 'password') {
-      return {
-        user: {
-          id: 'u1',
-          username: 'AnimeKun',
-          email: payload.email,
-          avatar: 'https://picsum.photos/seed/user1/80/80',
-          createdAt: new Date().toISOString(),
-          favoriteCharacters: DEFAULT_FAVORITE_CHARACTERS,
-        },
-        token: 'mock-jwt-token',
-      };
-    }
-    throw err;
-  }
+  return loginApi(payload);
 };
 
 const performRegister = async (payload: RegisterPayload): Promise<{ user: User; token: string }> => {
-  try {
-    const res = await registerApi(payload);
-    return res;
-  } catch (err) {
-    // Dev fallback
-    return {
-      user: {
-        id: `u-${Date.now()}`,
-        username: payload.username,
-        email: payload.email,
-        createdAt: new Date().toISOString(),
-        favoriteCharacters: DEFAULT_FAVORITE_CHARACTERS,
-      },
-      token: 'mock-jwt-token-new',
-    };
-  }
+  return registerApi(payload);
 };
 
 export const useAuthStore = create<AuthStore>()(
@@ -102,13 +87,26 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true, error: null });
         try {
           const { user, token } = await performLogin(payload);
-          const admin = isAdminEmail(user.email);
-          set({ user: { ...user, isAdmin: admin, role: admin ? 'admin' : 'user' }, token, isAuthenticated: true, isLoading: false });
+          const isAdmin = user.role === 'admin' || user.isAdmin === true;
+          // Restore saved favorites from localStorage for this user
+          const savedFavs = loadFavoritesFromStorage(user.email);
+          set({
+            user: {
+              ...user,
+              isAdmin,
+              role: isAdmin ? 'admin' : 'user',
+              favoriteCharacters: savedFavs ?? user.favoriteCharacters ?? DEFAULT_FAVORITE_CHARACTERS,
+            },
+            token,
+            isAuthenticated: true,
+            isLoading: false,
+          });
         } catch (err) {
           set({
             isLoading: false,
-            error: err instanceof Error ? err.message : 'Login gagal.',
+            error: err instanceof Error ? err.message : 'Login failed.',
           });
+          throw err;
         }
       },
 
@@ -116,13 +114,27 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true, error: null });
         try {
           const { user, token } = await performRegister(payload);
-          const admin = isAdminEmail(user.email);
-          set({ user: { ...user, isAdmin: admin, role: admin ? 'admin' : 'user' }, token, isAuthenticated: true, isLoading: false });
+          const isAdmin = user.role === 'admin' || user.isAdmin === true;
+          const initialFavs = DEFAULT_FAVORITE_CHARACTERS;
+          // Save initial favorites for new user
+          saveFavoritesToStorage(user.email, initialFavs);
+          set({
+            user: {
+              ...user,
+              isAdmin,
+              role: isAdmin ? 'admin' : 'user',
+              favoriteCharacters: initialFavs,
+            },
+            token,
+            isAuthenticated: true,
+            isLoading: false,
+          });
         } catch (err) {
           set({
             isLoading: false,
-            error: err instanceof Error ? err.message : 'Registrasi gagal.',
+            error: err instanceof Error ? err.message : 'Registration failed.',
           });
+          throw err;
         }
       },
 
@@ -141,10 +153,13 @@ export const useAuthStore = create<AuthStore>()(
             id: `char-${Date.now()}`,
             ...characterData,
           };
+          const updated = [...currentList, newChar];
+          // Persist to localStorage
+          saveFavoritesToStorage(state.user.email, updated);
           return {
             user: {
               ...state.user,
-              favoriteCharacters: [...currentList, newChar],
+              favoriteCharacters: updated,
             },
           };
         });
@@ -154,10 +169,13 @@ export const useAuthStore = create<AuthStore>()(
         set((state) => {
           if (!state.user) return state;
           const currentList = state.user.favoriteCharacters || DEFAULT_FAVORITE_CHARACTERS;
+          const updated = currentList.filter((c) => c.id !== id);
+          // Persist to localStorage
+          saveFavoritesToStorage(state.user.email, updated);
           return {
             user: {
               ...state.user,
-              favoriteCharacters: currentList.filter((c) => c.id !== id),
+              favoriteCharacters: updated,
             },
           };
         });

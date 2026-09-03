@@ -1,6 +1,6 @@
 import type { LoginPayload, RegisterPayload, AuthResponse } from '@/types/user';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 export async function loginApi(payload: LoginPayload): Promise<AuthResponse> {
   const res = await fetch(`${API_BASE}/auth/login`, {
@@ -35,4 +35,3 @@ export async function registerApi(payload: RegisterPayload): Promise<AuthRespons
 export async function logoutApi(): Promise<void> {
   await Promise.resolve();
 }
-

@@ -59,7 +59,7 @@ export function CharacterSection({ characters, animeTitle }: CharacterSectionPro
 
   const handleAddToProfile = (char: AnimeCharacter) => {
     if (!isAuthenticated || !user) {
-      alert('Silakan masuk (login) terlebih dahulu untuk menambah karakter ke profil!');
+      alert('Please sign in first to add characters to your profile!');
       return;
     }
 
@@ -68,10 +68,10 @@ export function CharacterSection({ characters, animeTitle }: CharacterSectionPro
       animeName: animeTitle,
       role: char.role === 'Main' ? 'Main Character' : char.role === 'Supporting' ? 'Supporting' : 'Antagonist',
       image: char.image,
-      description: char.voiceActor ? `Pengisi suara: ${char.voiceActor.name}` : undefined,
+      description: char.voiceActor ? `Voice Actor: ${char.voiceActor.name}` : undefined,
     });
 
-    setToastMsg(`${char.name} berhasil ditambahkan ke karakter favorit profilmu!`);
+    setToastMsg(`${char.name} successfully added to your favorite characters!`);
     setTimeout(() => setToastMsg(''), 3500);
   };
 
@@ -88,9 +88,9 @@ export function CharacterSection({ characters, animeTitle }: CharacterSectionPro
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <span className="eyebrow-mono text-sunset block mb-1">PENGISI SUARA & KARAKTER</span>
+          <span className="eyebrow-mono text-sunset block mb-1">CHARACTERS & VOICE ACTORS</span>
           <h2 className="display-sm text-ink text-xl font-bold flex items-center gap-2">
-            Karakter Anime
+            Anime Characters
             <span className="text-body-mid text-sm font-normal">({characters.length})</span>
           </h2>
         </div>
@@ -135,7 +135,7 @@ export function CharacterSection({ characters, animeTitle }: CharacterSectionPro
                         VA
                       </div>
                     )}
-                    <span className="text-body text-[11px] font-display truncate" title={`Seiyuu: ${char.voiceActor.name}`}>
+                    <span className="text-body text-[11px] font-display truncate" title={`Voice Actor: ${char.voiceActor.name}`}>
                       {char.voiceActor.name}
                     </span>
                   </div>
@@ -146,9 +146,9 @@ export function CharacterSection({ characters, animeTitle }: CharacterSectionPro
               <button
                 onClick={() => handleAddToProfile(char)}
                 className="mt-2 text-[10px] font-mono text-sunset hover:text-white bg-sunset/10 hover:bg-sunset border border-sunset/30 px-2.5 py-1 rounded-[6px] transition-all flex items-center justify-center gap-1 w-full"
-                title="Tambah ke Karakter Favorit di Profil"
+                title="Add to Favorite Characters"
               >
-                + Tambah ke Profil
+                + Add to Profile
               </button>
             </div>
           </div>

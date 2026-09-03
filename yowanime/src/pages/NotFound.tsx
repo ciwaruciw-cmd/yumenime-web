@@ -13,10 +13,10 @@ export default function NotFound() {
         404
       </h1>
 
-      <p className="eyebrow-mono text-mute mb-2">HALAMAN TIDAK DITEMUKAN</p>
+      <p className="eyebrow-mono text-mute mb-2">PAGE NOT FOUND</p>
       <p className="text-body text-sm font-display mb-6 max-w-sm">
-        Halaman yang kamu cari tidak ada atau sudah dipindahkan.
-        Mungkin anime ini belum rilis?
+        The page you're looking for does not exist or has been moved.
+        Maybe this anime hasn't aired yet?
       </p>
 
       <div className="flex gap-3">
@@ -26,12 +26,12 @@ export default function NotFound() {
               <path d="M19 12H5M12 19l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           }>
-            Kembali ke Beranda
+            Back to Home
           </Button>
         </Link>
         <Link to="/anime">
           <Button variant="outline" size="lg">
-            Jelajahi Anime
+            Explore Anime
           </Button>
         </Link>
       </div>

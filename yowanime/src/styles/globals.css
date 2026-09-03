@@ -51,15 +51,17 @@
   --spacing: 0.25rem;
 }
 
-/* ── Base Reset & Defaults ── */
+/* ── Base Reset & Mobile Performance Defaults ── */
 *, *::before, *::after {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html {
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body {
@@ -70,6 +72,8 @@ body {
   font-size: var(--font-size-body-md);
   line-height: 1.5;
   min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ── Custom Scrollbar ── */
@@ -199,6 +203,11 @@ body {
   animation: fadeInUp 0.4s ease forwards;
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ── Video player custom styles ── */
 .video-player-wrapper {
   position: relative;
@@ -241,7 +250,7 @@ body {
 
 /* ── Page transition ── */
 .page-enter {
-  animation: fadeInUp 0.3s ease forwards;
+  animation: fadeInUp 0.25s ease forwards;
 }
 
 /* ── Focus outline (accessibility) ── */
@@ -249,3 +258,32 @@ body {
   outline: 2px solid rgba(255, 255, 255, 0.5);
   outline-offset: 2px;
 }
+
+/* ── Mobile Performance & Virtual Rendering Optimizations ── */
+.cv-auto {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 280px;
+}
+
+.cv-auto-sm {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 80px;
+}
+
+.gpu-accelerated {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.touch-pan-y {
+  touch-action: pan-y;
+}
+
+.touch-pan-x {
+  touch-action: pan-x;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+

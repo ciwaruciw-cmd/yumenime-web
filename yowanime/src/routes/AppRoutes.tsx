@@ -12,6 +12,7 @@ const Genre = lazy(() => import('@/pages/Genre'));
 const Login = lazy(() => import('@/pages/Login'));
 const Register = lazy(() => import('@/pages/Register'));
 const Watchlist = lazy(() => import('@/pages/Watchlist'));
+const Schedule = lazy(() => import('@/pages/Schedule'));
 const Profile = lazy(() => import('@/pages/Profile'));
 const Admin = lazy(() => import('@/pages/Admin'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
@@ -42,6 +43,7 @@ export function AppRoutes() {
         <Route path="/anime/:id/episode/:ep" element={<WatchEpisode />} />
         <Route path="/search" element={<Search />} />
         <Route path="/genre" element={<Genre />} />
+        <Route path="/schedule" element={<Schedule />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/watchlist" element={<Watchlist />} />

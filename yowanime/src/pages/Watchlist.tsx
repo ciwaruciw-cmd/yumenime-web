@@ -23,14 +23,14 @@ export default function Watchlist() {
         </div>
         <h1 className="display-sm text-ink mb-2">Watchlist</h1>
         <p className="text-body text-sm font-display mb-5 max-w-xs">
-          Masuk ke akunmu untuk menyimpan anime favorit dan mengaksesnya kapan saja.
+          Sign in to your account to save your favorite anime and access them anytime.
         </p>
         <div className="flex gap-3">
           <Link to="/login">
-            <Button variant="primary" size="lg">Masuk</Button>
+            <Button variant="primary" size="lg">Sign In</Button>
           </Link>
           <Link to="/register">
-            <Button variant="outline" size="lg">Daftar</Button>
+            <Button variant="outline" size="lg">Sign Up</Button>
           </Link>
         </div>
       </div>
@@ -45,7 +45,7 @@ export default function Watchlist() {
           <span className="eyebrow-mono text-mute block mb-1">MY LIST</span>
           <h1 className="display-md text-ink">Watchlist</h1>
           <p className="text-body text-sm font-display mt-1">
-            {count > 0 ? `${count} anime tersimpan` : 'Belum ada anime tersimpan'}
+            {count > 0 ? `${count} anime saved` : 'No anime saved yet'}
           </p>
         </div>
 
@@ -59,12 +59,12 @@ export default function Watchlist() {
                 <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </div>
-            <p className="text-body text-sm font-display mb-1">Watchlist kamu masih kosong</p>
+            <p className="text-body text-sm font-display mb-1">Your watchlist is empty</p>
             <p className="text-mute text-xs font-display mb-5">
-              Klik ikon bookmark di anime card untuk menambahkan
+              Click the bookmark icon on any anime card to add it
             </p>
             <Link to="/anime">
-              <Button variant="outline">Jelajahi Anime</Button>
+              <Button variant="outline">Explore Anime</Button>
             </Link>
           </div>
         )}

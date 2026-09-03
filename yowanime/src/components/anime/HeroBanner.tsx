@@ -21,8 +21,8 @@ export function HeroBanner({ anime }: HeroBannerProps) {
 
   return (
     <section
-      className="relative w-full min-h-[560px] md:min-h-[640px] flex items-end pt-24 pb-12"
-      aria-label="Anime unggulan"
+      className="relative w-full min-h-[440px] sm:min-h-[520px] md:min-h-[640px] flex items-end pt-16 md:pt-24 pb-8 md:pb-12 transform-gpu"
+      aria-label="Featured anime"
     >
       {/* Background image */}
       <div className="absolute inset-0 bg-black">
@@ -46,7 +46,7 @@ export function HeroBanner({ anime }: HeroBannerProps) {
         <div className="max-w-3xl space-y-4 animate-fade-in-up">
           {/* Eyebrow */}
           <div className="flex items-center gap-3 flex-wrap">
-            <span className="eyebrow-mono text-sunset">ANIME UNGGULAN</span>
+            <span className="eyebrow-mono text-sunset">FEATURED ANIME</span>
             <Badge variant="sunset">{anime.type}</Badge>
             {anime.status === 'ongoing' && <Badge variant="success">Ongoing</Badge>}
           </div>
@@ -71,7 +71,7 @@ export function HeroBanner({ anime }: HeroBannerProps) {
             {anime.episodes > 0 && (
               <>
                 <span className="text-mute">·</span>
-                <span>{anime.episodes} Episode</span>
+                <span>{anime.episodes} Episodes</span>
               </>
             )}
           </div>
@@ -96,7 +96,7 @@ export function HeroBanner({ anime }: HeroBannerProps) {
                   <polygon points="5 3 19 12 5 21 5 3" />
                 </svg>
               }>
-                Tonton Sekarang
+                Watch Now
               </Button>
             </Link>
             <Button
@@ -115,7 +115,7 @@ export function HeroBanner({ anime }: HeroBannerProps) {
                 )
               }
             >
-              {inWatchlist ? 'Tersimpan' : 'Watchlist'}
+              {inWatchlist ? 'Saved' : 'Watchlist'}
             </Button>
             <Link to={`/anime/${anime.slug}`}>
               <Button variant="outline" size="lg" icon={
@@ -123,7 +123,7 @@ export function HeroBanner({ anime }: HeroBannerProps) {
                   <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeLinecap="round" />
                 </svg>
               }>
-                Detail
+                Details
               </Button>
             </Link>
           </div>

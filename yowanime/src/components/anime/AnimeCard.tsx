@@ -32,21 +32,21 @@ export function AnimeCard({ anime, className, compact = false }: AnimeCardProps)
 
   const statusLabels: Record<string, string> = {
     ongoing: 'Ongoing',
-    completed: 'Selesai',
-    upcoming: 'Segera',
+    completed: 'Completed',
+    upcoming: 'Upcoming',
   };
 
   return (
     <div
       className={clsx(
-        'group relative flex flex-col bg-canvas-card border border-hairline rounded-[8px] overflow-hidden h-full',
-        'transition-all duration-300 hover:border-white/20 hover:-translate-y-0.5',
+        'group relative flex flex-col bg-canvas-card border border-hairline rounded-[8px] overflow-hidden h-full cv-auto transform-gpu',
+        'transition-transform duration-200 hover:border-white/20 hover:-translate-y-0.5',
         className
       )}
     >
       {/* Poster */}
       <div className="relative aspect-[2/3] overflow-hidden bg-canvas-mid flex-shrink-0">
-        <Link to={`/anime/${anime.slug}`} aria-label={`Lihat detail ${anime.title}`} className="block w-full h-full">
+        <Link to={`/anime/${anime.slug}`} aria-label={`View details for ${anime.title}`} className="block w-full h-full">
           {!imgError ? (
             <img
               src={anime.poster}
@@ -87,7 +87,7 @@ export function AnimeCard({ anime, className, compact = false }: AnimeCardProps)
         </div>
 
         {/* Score badge */}
-        <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/60 backdrop-blur-sm rounded-full px-2 py-0.5 pointer-events-none">
+        <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/85 border border-white/10 rounded-full px-2 py-0.5 pointer-events-none">
           <svg width="9" height="9" viewBox="0 0 24 24" fill="#ff7a17">
             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
           </svg>
@@ -101,7 +101,7 @@ export function AnimeCard({ anime, className, compact = false }: AnimeCardProps)
               <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
                 <polygon points="5 3 19 12 5 21 5 3" />
               </svg>
-              Tonton
+              Watch
             </Button>
           </Link>
           <Button
@@ -111,8 +111,8 @@ export function AnimeCard({ anime, className, compact = false }: AnimeCardProps)
               e.preventDefault();
               toggle(anime);
             }}
-            aria-label={inWatchlist ? 'Hapus dari watchlist' : 'Tambah ke watchlist'}
-            title={inWatchlist ? 'Hapus dari watchlist' : 'Tambah ke watchlist'}
+            aria-label={inWatchlist ? 'Remove from watchlist' : 'Add to watchlist'}
+            title={inWatchlist ? 'Remove from watchlist' : 'Add to watchlist'}
           >
             {inWatchlist ? (
               <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">

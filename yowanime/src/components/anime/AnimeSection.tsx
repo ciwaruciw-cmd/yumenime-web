@@ -60,7 +60,7 @@ export function AnimeSection({
                 <button
                   onClick={scrollLeft}
                   className="w-8 h-8 rounded-full border border-hairline flex items-center justify-center text-mute hover:text-ink hover:border-white/20 transition-colors"
-                  aria-label="Scroll kiri"
+                  aria-label="Scroll left"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
@@ -69,7 +69,7 @@ export function AnimeSection({
                 <button
                   onClick={scrollRight}
                   className="w-8 h-8 rounded-full border border-hairline flex items-center justify-center text-mute hover:text-ink hover:border-white/20 transition-colors"
-                  aria-label="Scroll kanan"
+                  aria-label="Scroll right"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
@@ -80,7 +80,7 @@ export function AnimeSection({
             {viewAllHref && (
               <Link to={viewAllHref}>
                 <Button variant="outline-sm" size="sm">
-                  Lihat Semua
+                  View All
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M5 12h14M12 5l7 7-7 7" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
@@ -100,8 +100,8 @@ export function AnimeSection({
 
           <div
             ref={scrollRef}
-            className="flex gap-4 overflow-x-auto scroll-x pb-3 px-6 items-stretch"
-            style={{ scrollPaddingInline: '24px' }}
+            className="flex gap-4 overflow-x-auto scroll-x touch-pan-x pb-3 px-6 items-stretch"
+            style={{ scrollPaddingInline: '24px', WebkitOverflowScrolling: 'touch' }}
           >
             {animes.map((anime) => (
               <div key={anime.id} className="shrink-0 w-[155px] sm:w-[168px] md:w-[180px] flex flex-col">

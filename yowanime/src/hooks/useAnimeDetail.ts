@@ -11,14 +11,23 @@ interface UseAnimeDetailReturn {
 }
 
 const DETAIL_CACHE_TTL = 5 * 60 * 1000; // 5 menit
+const DUMMY_DOMAINS = ['commondatastorage', 'vjs.zencdn', 'w3schools', 'mozilla.net'];
 
 function getDetailCache(key: string): { anime: Anime; episodes: Episode[] } | null {
   try {
-    const raw = sessionStorage.getItem(`detail:${key}`);
+    const raw = sessionStorage.getItem(`detail:v3:${key}`);
     if (!raw) return null;
     const { data, ts } = JSON.parse(raw) as { data: { anime: Anime; episodes: Episode[] }; ts: number };
     if (Date.now() - ts > DETAIL_CACHE_TTL || !data || !data.episodes || data.episodes.length === 0) {
-      sessionStorage.removeItem(`detail:${key}`);
+      sessionStorage.removeItem(`detail:v3:${key}`);
+      return null;
+    }
+    // If cache only contains dummy videos, bust it to check for real stream
+    const hasOnlyDummy = data.episodes.every((ep) =>
+      ep.sources.every((s) => DUMMY_DOMAINS.some((d) => s.url.includes(d)))
+    );
+    if (hasOnlyDummy) {
+      sessionStorage.removeItem(`detail:v3:${key}`);
       return null;
     }
     return data;
@@ -29,7 +38,7 @@ function getDetailCache(key: string): { anime: Anime; episodes: Episode[] } | nu
 
 function setDetailCache(key: string, data: { anime: Anime; episodes: Episode[] }) {
   try {
-    sessionStorage.setItem(`detail:${key}`, JSON.stringify({ data, ts: Date.now() }));
+    sessionStorage.setItem(`detail:v3:${key}`, JSON.stringify({ data, ts: Date.now() }));
   } catch { /* private mode / full */ }
 }
 

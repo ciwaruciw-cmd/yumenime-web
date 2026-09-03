@@ -12,9 +12,41 @@ import { formatDate } from '@/utils/formatDate';
 import { isAdminEmail } from '@/config/adminConfig';
 import type { FavoriteCharacter } from '@/types/user';
 
+export const PRESET_GIF_AVATARS = [
+  {
+    name: 'Anya Heh',
+    url: 'https://i.imgur.com/d4ZXvVf.gif',
+  },
+  {
+    name: 'Bocchi Rock',
+    url: 'https://i.imgur.com/YIeHXaN.gif',
+  },
+  {
+    name: 'Nezuko Spin',
+    url: 'https://i.imgur.com/7cjTzqM.gif',
+  },
+  {
+    name: 'Totoro Wave',
+    url: 'https://i.imgur.com/S7ztzHM.gif',
+  },
+  {
+    name: 'Pikachu Run',
+    url: 'https://i.imgur.com/aJERKw1.gif',
+  },
+  {
+    name: 'Kawaii Cat',
+    url: 'https://i.imgur.com/aCz5iAT.gif',
+  },
+];
+
+export const isGifAvatar = (url?: string): boolean => {
+  if (!url) return false;
+  return url.toLowerCase().includes('.gif') || url.startsWith('data:image/gif');
+};
+
 /**
  * User Profile Page — account details, favorite characters, watchlist overview, edit profile settings.
- * Supports direct image pick from device gallery via FileReader.
+ * Supports direct image & GIF pick from device gallery via FileReader and custom GIF URLs.
  */
 export default function Profile() {
   const navigate = useNavigate();
@@ -40,16 +72,16 @@ export default function Profile() {
             <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </div>
-        <h1 className="display-sm text-ink mb-2">Profil Pengguna</h1>
+        <h1 className="display-sm text-ink mb-2">User Profile</h1>
         <p className="text-body text-sm font-display mb-6 max-w-xs">
-          Silakan masuk terlebih dahulu untuk mengakses halaman profil akunmu.
+          Please sign in first to access your profile page.
         </p>
         <div className="flex gap-3">
           <Link to="/login">
-            <Button variant="primary" size="lg">Masuk</Button>
+            <Button variant="primary" size="lg">Sign In</Button>
           </Link>
           <Link to="/register">
-            <Button variant="outline" size="lg">Daftar</Button>
+            <Button variant="outline" size="lg">Sign Up</Button>
           </Link>
         </div>
       </div>
@@ -59,12 +91,16 @@ export default function Profile() {
   const favoriteCharacters: FavoriteCharacter[] = user.favoriteCharacters || DEFAULT_FAVORITE_CHARACTERS;
   const favCharCount = favoriteCharacters.length;
 
-  // Handle picking avatar from device gallery/files
+  // Handle picking avatar (image / animated GIF) from device gallery/files
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (!file.type.startsWith('image/')) {
-        alert('Harap pilih file gambar (JPG, PNG, WEBP, dll)');
+      if (!file.type.startsWith('image/') && !file.name.toLowerCase().endsWith('.gif')) {
+        alert('Please select an image or GIF file (GIF, JPG, PNG, WEBP)');
+        return;
+      }
+      if (file.size > 15 * 1024 * 1024) {
+        alert('File size too large. Maximum 15MB for GIF / image files.');
         return;
       }
       const reader = new FileReader();
@@ -73,7 +109,7 @@ export default function Profile() {
           const base64Data = reader.result as string;
           setAvatar(base64Data);
           updateProfile({ avatar: base64Data });
-          setSuccessMsg('Foto profil berhasil diperbarui dari galeri!');
+          setSuccessMsg('Profile picture / GIF animation updated from gallery!');
           setTimeout(() => setSuccessMsg(''), 3500);
         }
       };
@@ -88,24 +124,24 @@ export default function Profile() {
       email,
       avatar: avatar.trim() ? avatar : `https://picsum.photos/seed/${user.id}/120/120`,
     });
-    setSuccessMsg('Profil berhasil diperbarui!');
+    setSuccessMsg('Profile updated successfully!');
     setTimeout(() => setSuccessMsg(''), 3000);
   };
 
   const handleAddCharacter = (charData: Omit<FavoriteCharacter, 'id'>) => {
     if (favCharCount >= 15) {
-      alert('Batas maksimum 15 karakter favorit telah tercapai!');
+      alert('Maximum limit of 15 favorite characters reached!');
       return;
     }
     addFavoriteCharacter(charData);
-    setSuccessMsg(`Karakter ${charData.name} berhasil ditambahkan ke daftar favorit!`);
+    setSuccessMsg(`Character ${charData.name} added to your favorites!`);
     setTimeout(() => setSuccessMsg(''), 3500);
   };
 
   const handleRemoveCharacter = (id: string, name: string) => {
-    if (confirm(`Apakah kamu yakin ingin menghapus ${name} dari karakter favorit?`)) {
+    if (confirm(`Are you sure you want to remove ${name} from your favorite characters?`)) {
       removeFavoriteCharacter(id);
-      setSuccessMsg(`${name} berhasil dihapus.`);
+      setSuccessMsg(`${name} removed successfully.`);
       setTimeout(() => setSuccessMsg(''), 3000);
     }
   };
@@ -134,7 +170,7 @@ export default function Profile() {
         {/* Profile Header Card */}
         <div className="bg-canvas-card border border-hairline rounded-[8px] p-6 md:p-8 mb-8 relative overflow-hidden">
           {/* Accent decoration overlay */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-sunset/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-[radial-gradient(circle,rgba(255,122,23,0.06)_0%,transparent_70%)] rounded-full pointer-events-none" />
 
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 relative z-10">
             {/* Avatar with click-to-upload badge */}
@@ -144,14 +180,19 @@ export default function Profile() {
                 alt={user.username}
                 className="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-hairline object-cover shadow-xl group-hover:opacity-80 transition-opacity"
               />
+              {isGifAvatar(avatar || user.avatar) && (
+                <span className="absolute top-0 left-0 bg-sunset text-white text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full shadow-md z-10">
+                  GIF
+                </span>
+              )}
               {/* Overlay camera badge */}
               <div className="absolute inset-0 bg-black/50 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                <span className="text-white text-xs font-display flex flex-col items-center gap-1">
+                <span className="text-white text-xs font-display flex flex-col items-center gap-1 text-center px-1">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
                     <circle cx="12" cy="13" r="4" />
                   </svg>
-                  Ganti Foto
+                  Change Photo / GIF
                 </span>
               </div>
               <span className="absolute bottom-1 right-1 bg-green-500 w-4 h-4 rounded-full border-2 border-canvas-card" title="Online" />
@@ -161,7 +202,7 @@ export default function Profile() {
             <div className="text-center sm:text-left flex-1 space-y-2">
               <div className="flex flex-col sm:flex-row items-center sm:items-start gap-2">
                 <h1 className="display-sm text-ink">{user.username}</h1>
-                {isAdminEmail(user.email) && (
+                {(user.role === 'admin' || user.isAdmin === true || isAdminEmail(user.email)) && (
                   <Badge variant="danger" size="md">ADMIN</Badge>
                 )}
                 <Badge variant="sunset" size="md">VIP MEMBER</Badge>
@@ -175,21 +216,21 @@ export default function Profile() {
                     <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
                     <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
                   </svg>
-                  Bergabung {formatDate(user.createdAt)}
+                  Joined {formatDate(user.createdAt)}
                 </span>
                 <span className="text-hairline">·</span>
                 <span className="flex items-center gap-1.5">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" />
                   </svg>
-                  {count} Anime Tersimpan
+                  {count} Saved Anime
                 </span>
                 <span className="text-hairline">·</span>
                 <span className="flex items-center gap-1.5 text-sunset font-medium">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
-                  {favCharCount}/15 Karakter Favorit
+                  {favCharCount}/15 Favorite Characters
                 </span>
               </div>
             </div>
@@ -209,7 +250,7 @@ export default function Profile() {
                   </svg>
                 }
               >
-                Keluar
+                Sign Out
               </Button>
             </div>
           </div>
@@ -226,10 +267,10 @@ export default function Profile() {
         {/* Profile Tabs */}
         <div className="flex gap-2 border-b border-hairline mb-8 overflow-x-auto pb-1">
           {[
-            { id: 'overview', label: 'Ringkasan' },
-            { id: 'characters', label: `Karakter Favorit (${favCharCount}/15)` },
+            { id: 'overview', label: 'Overview' },
+            { id: 'characters', label: `Favorite Characters (${favCharCount}/15)` },
             { id: 'watchlist', label: `Watchlist (${count})` },
-            { id: 'settings', label: 'Pengaturan Profil' },
+            { id: 'settings', label: 'Profile Settings' },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -272,8 +313,8 @@ export default function Profile() {
                     </svg>
                   </div>
                   <div>
-                    <p className="eyebrow-mono text-mute">FAV KARAKTER</p>
-                    <p className="display-sm text-ink">{favCharCount} <span className="text-xs text-body font-display">karakter</span></p>
+                    <p className="eyebrow-mono text-mute">FAV CHARACTERS</p>
+                    <p className="display-sm text-ink">{favCharCount} <span className="text-xs text-body font-display">characters</span></p>
                   </div>
                 </div>
               </Card>
@@ -286,9 +327,9 @@ export default function Profile() {
                     </svg>
                   </div>
                   <div>
-                    <p className="eyebrow-mono text-mute">STATUS AKUN</p>
+                    <p className="eyebrow-mono text-mute">ACCOUNT STATUS</p>
                     <p className="text-sm font-display text-ink font-medium">
-                      {isAdminEmail(user.email) ? (
+                      {(user.role === 'admin' || user.isAdmin === true || isAdminEmail(user.email)) ? (
                         <span className="text-red-400 font-semibold flex items-center gap-1.5">
                           <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse inline-block" />
                           Administrator
@@ -309,8 +350,8 @@ export default function Profile() {
                     </svg>
                   </div>
                   <div>
-                    <p className="eyebrow-mono text-mute">DURASI NONTON</p>
-                    <p className="text-sm font-display text-ink font-medium">124 Jam 30 Menit</p>
+                    <p className="eyebrow-mono text-mute">WATCH TIME</p>
+                    <p className="text-sm font-display text-ink font-medium">0 Mins</p>
                   </div>
                 </div>
               </Card>
@@ -320,16 +361,16 @@ export default function Profile() {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <span className="eyebrow-mono text-sunset block mb-1">FAVORIT</span>
-                  <h2 className="display-sm text-ink">Karakter Anime Favorit</h2>
+                  <span className="eyebrow-mono text-sunset block mb-1">FAVORITES</span>
+                  <h2 className="display-sm text-ink">Favorite Anime Characters</h2>
                 </div>
                 <div className="flex gap-2">
                   <Button variant="primary" size="sm" onClick={() => setIsAddModalOpen(true)}>
-                    + Tambah Karakter
+                    + Add Character
                   </Button>
                   {favCharCount > 0 && (
                     <Button variant="outline-sm" size="sm" onClick={() => setActiveTab('characters')}>
-                      Lihat Semua ({favCharCount})
+                      View All ({favCharCount})
                     </Button>
                   )}
                 </div>
@@ -368,7 +409,7 @@ export default function Profile() {
                       <button
                         onClick={() => handleRemoveCharacter(char.id, char.name)}
                         className="opacity-0 group-hover:opacity-100 transition-opacity text-mute hover:text-red-400 p-1"
-                        title="Hapus Karakter"
+                        title="Remove Character"
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polyline points="3 6 5 6 21 6" />
@@ -380,9 +421,9 @@ export default function Profile() {
                 </div>
               ) : (
                 <Card className="text-center py-10">
-                  <p className="text-body text-sm font-display mb-3">Belum ada karakter favorit tersimpan.</p>
+                  <p className="text-body text-sm font-display mb-3">No favorite characters saved yet.</p>
                   <Button variant="primary" size="sm" onClick={() => setIsAddModalOpen(true)}>
-                    + Tambah Karakter Pertama
+                    + Add First Character
                   </Button>
                 </Card>
               )}
@@ -392,12 +433,12 @@ export default function Profile() {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <span className="eyebrow-mono text-mute block mb-1">KOLEKSI</span>
-                  <h2 className="display-sm text-ink">Watchlist Terbaru</h2>
+                  <span className="eyebrow-mono text-mute block mb-1">COLLECTION</span>
+                  <h2 className="display-sm text-ink">Recent Watchlist</h2>
                 </div>
                 {count > 0 && (
                   <Button variant="outline-sm" size="sm" onClick={() => setActiveTab('watchlist')}>
-                    Lihat Semua ({count})
+                    View All ({count})
                   </Button>
                 )}
               </div>
@@ -406,9 +447,9 @@ export default function Profile() {
                 <AnimeGrid animes={watchlistAnimes.slice(0, 5)} />
               ) : (
                 <Card className="text-center py-12">
-                  <p className="text-body text-sm font-display mb-3">Belum ada anime di watchlist kamu.</p>
+                  <p className="text-body text-sm font-display mb-3">No anime in your watchlist yet.</p>
                   <Link to="/anime">
-                    <Button variant="outline-sm" size="sm">Cari Anime</Button>
+                    <Button variant="outline-sm" size="sm">Explore Anime</Button>
                   </Link>
                 </Card>
               )}
@@ -421,13 +462,13 @@ export default function Profile() {
           <div className="space-y-6 animate-fade-in-up">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-canvas-card border border-hairline rounded-[8px] p-5">
               <div>
-                <h2 className="display-sm text-ink text-xl font-bold">Karakter Anime Favoritmu</h2>
+                <h2 className="display-sm text-ink text-xl font-bold">Your Favorite Anime Characters</h2>
                 <p className="text-xs text-mute font-display mt-0.5">
-                  Daftar karakter anime pilihan terbaik yang kamu sukai.
+                  Your handpicked list of top anime characters.
                 </p>
               </div>
               <Button variant="primary" size="md" onClick={() => setIsAddModalOpen(true)}>
-                + Tambah Karakter Baru
+                + Add New Character
               </Button>
             </div>
 
@@ -466,7 +507,7 @@ export default function Profile() {
                         <button
                           onClick={() => handleRemoveCharacter(char.id, char.name)}
                           className="opacity-60 group-hover:opacity-100 hover:text-red-400 text-mute transition-all p-1"
-                          title="Hapus Karakter"
+                          title="Remove Character"
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <polyline points="3 6 5 6 21 6" />
@@ -491,12 +532,12 @@ export default function Profile() {
                     <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                   </svg>
                 </div>
-                <h3 className="display-sm text-ink text-base mb-2">Belum ada karakter favorit</h3>
+                <h3 className="display-sm text-ink text-base mb-2">No favorite characters yet</h3>
                 <p className="text-body text-sm font-display mb-6 max-w-sm mx-auto">
-                  Tambahkan karakter anime favoritmu untuk ditampilkan di halaman profil!
+                  Add your favorite anime characters to display them on your profile!
                 </p>
                 <Button variant="primary" size="md" onClick={() => setIsAddModalOpen(true)}>
-                  + Tambah Karakter Favorit
+                  + Add Favorite Character
                 </Button>
               </Card>
             )}
@@ -508,7 +549,7 @@ export default function Profile() {
           <div className="animate-fade-in-up">
             <AnimeGrid
               animes={watchlistAnimes}
-              emptyMessage="Belum ada anime tersimpan di watchlist kamu."
+              emptyMessage="No anime saved in your watchlist yet."
             />
           </div>
         )}
@@ -517,35 +558,107 @@ export default function Profile() {
         {activeTab === 'settings' && (
           <div className="max-w-xl animate-fade-in-up">
             <Card>
-              <h2 className="display-sm text-ink mb-2">Edit Profil</h2>
-              <p className="text-xs text-body font-display mb-6">Perbarui foto profil, username, dan email akunmu.</p>
+              <h2 className="display-sm text-ink mb-2">Edit Profile</h2>
+              <p className="text-xs text-body font-display mb-6">Update your profile picture, username, and account email.</p>
 
               {/* Avatar Uploader Section */}
-              <div className="mb-6 p-4 bg-canvas-soft border border-hairline rounded-[8px] flex flex-col sm:flex-row items-center gap-4">
-                <img
-                  src={avatar || user.avatar || `https://picsum.photos/seed/${user.id}/80/80`}
-                  alt="Preview Avatar"
-                  className="w-16 h-16 rounded-full border border-hairline object-cover shrink-0"
-                />
-                <div className="flex-1 text-center sm:text-left space-y-2">
-                  <p className="text-xs font-display text-ink font-medium">Foto Profil (Avatar)</p>
-                  <p className="text-[11px] text-mute font-display">
-                    Pilih gambar dari HP/Galeri kamu (format JPG, PNG, WEBP).
+              <div className="mb-6 p-4 bg-canvas-soft border border-hairline rounded-[8px] space-y-4">
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  <div className="relative shrink-0">
+                    <img
+                      src={avatar || user.avatar || `https://picsum.photos/seed/${user.id}/80/80`}
+                      alt="Preview Avatar"
+                      className="w-16 h-16 rounded-full border border-hairline object-cover"
+                    />
+                    {isGifAvatar(avatar || user.avatar) && (
+                      <span className="absolute -top-1 -right-1 bg-sunset text-white text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-full shadow">
+                        GIF
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 text-center sm:text-left space-y-1.5">
+                    <p className="text-xs font-display text-ink font-medium">Profile Picture / GIF Animation</p>
+                    <p className="text-[11px] text-mute font-display">
+                      Supports animated GIF, JPG, PNG, WEBP from gallery or online URL.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline-sm"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      icon={
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
+                          <circle cx="12" cy="13" r="4" />
+                        </svg>
+                      }
+                    >
+                      Choose Photo / GIF from Gallery
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Preset Anime GIF Quick Picker */}
+                <div className="pt-3 border-t border-hairline">
+                  <p className="text-[11px] font-mono text-mute mb-2 uppercase tracking-wider">
+                    Choose Popular Animated GIF Presets:
                   </p>
-                  <Button
-                    type="button"
-                    variant="outline-sm"
-                    size="sm"
-                    onClick={() => fileInputRef.current?.click()}
-                    icon={
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" />
-                        <circle cx="12" cy="13" r="4" />
-                      </svg>
-                    }
-                  >
-                    Pilih Foto dari Galeri
-                  </Button>
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    {PRESET_GIF_AVATARS.map((gif) => (
+                      <button
+                        key={gif.name}
+                        type="button"
+                        onClick={() => {
+                          setAvatar(gif.url);
+                          updateProfile({ avatar: gif.url });
+                          setSuccessMsg(`Preset GIF ${gif.name} selected!`);
+                          setTimeout(() => setSuccessMsg(''), 3000);
+                        }}
+                        className={`group relative rounded-[6px] overflow-hidden border p-1 transition-all ${
+                          avatar === gif.url
+                            ? 'border-sunset bg-sunset/10 ring-2 ring-sunset/30'
+                            : 'border-hairline hover:border-white/30 bg-black/20'
+                        }`}
+                        title={gif.name}
+                      >
+                        <img
+                          src={gif.url}
+                          alt={gif.name}
+                          className="w-full aspect-square rounded-[4px] object-cover"
+                        />
+                        <span className="block text-[9px] font-display text-mute group-hover:text-ink truncate mt-1 text-center">
+                          {gif.name}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Custom GIF URL Input */}
+                <div className="pt-3 border-t border-hairline">
+                  <label className="block text-[11px] font-mono text-mute mb-1 uppercase tracking-wider">
+                    Or Enter Image / Animated GIF URL:
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      placeholder="https://media.tenor.com/... or direct .gif link"
+                      value={avatar}
+                      onChange={(e) => setAvatar(e.target.value)}
+                      className="flex-1 bg-canvas text-body text-xs font-mono border border-hairline rounded-[6px] px-3 py-1.5 outline-none focus:border-sunset transition-colors"
+                    />
+                    {avatar && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setAvatar('')}
+                        className="text-xs text-mute hover:text-ink"
+                      >
+                        Reset
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -567,7 +680,7 @@ export default function Profile() {
 
                 <div className="pt-2 flex gap-3">
                   <Button type="submit" variant="primary" size="md">
-                    Simpan Perubahan
+                    Save Changes
                   </Button>
                   <Button
                     type="button"
@@ -579,7 +692,7 @@ export default function Profile() {
                       setAvatar(user.avatar ?? '');
                     }}
                   >
-                    Batal
+                    Cancel
                   </Button>
                 </div>
               </form>

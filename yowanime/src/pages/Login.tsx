@@ -30,10 +30,10 @@ export default function Login() {
         <div className="bg-canvas-soft border border-hairline rounded-[8px] p-6 md:p-8">
           {/* Header */}
           <div className="text-center mb-6">
-            <span className="eyebrow-mono text-mute block mb-2">AKUN</span>
-            <h1 className="display-sm text-ink">Masuk</h1>
+            <span className="eyebrow-mono text-mute block mb-2">ACCOUNT</span>
+            <h1 className="display-sm text-ink">Sign In</h1>
             <p className="text-sm text-body font-display mt-1">
-              Masuk untuk menyimpan watchlist dan riwayat
+              Sign in to access your watchlist and history
             </p>
           </div>
 
@@ -49,7 +49,7 @@ export default function Login() {
             <Input
               label="Email"
               type="email"
-              placeholder="email@contoh.com"
+              placeholder="email@example.com"
               value={email}
               onChange={(e) => { setEmail(e.target.value); clearError(); }}
               required
@@ -71,7 +71,7 @@ export default function Login() {
               fullWidth
               loading={isLoading}
             >
-              Masuk
+              Sign In
             </Button>
           </form>
 
@@ -86,9 +86,9 @@ export default function Login() {
 
           {/* Register link */}
           <p className="text-center text-sm text-body font-display mt-5">
-            Belum punya akun?{' '}
+            Don't have an account?{' '}
             <Link to="/register" className="text-sunset hover:underline">
-              Daftar
+              Sign Up
             </Link>
           </p>
         </div>

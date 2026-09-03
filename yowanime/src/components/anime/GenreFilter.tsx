@@ -49,7 +49,7 @@ export function GenreFilter({ selectedGenres = [], onGenreChange, useUrlParams =
         ref={scrollRef}
         className="flex gap-2 overflow-x-auto pb-1 scroll-x"
         role="group"
-        aria-label="Filter genre"
+        aria-label="Filter by genre"
       >
         {/* All (clear) */}
         <button
@@ -62,7 +62,7 @@ export function GenreFilter({ selectedGenres = [], onGenreChange, useUrlParams =
           )}
           aria-pressed={!activeGenre}
         >
-          Semua
+          All
         </button>
 
         {ALL_GENRES.map((genre) => (

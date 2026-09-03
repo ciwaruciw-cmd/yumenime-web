@@ -21,11 +21,11 @@ export default function Register() {
     setLocalError('');
 
     if (password !== confirmPassword) {
-      setLocalError('Password tidak cocok.');
+      setLocalError('Passwords do not match.');
       return;
     }
     if (password.length < 6) {
-      setLocalError('Password minimal 6 karakter.');
+      setLocalError('Password must be at least 6 characters.');
       return;
     }
 
@@ -43,10 +43,10 @@ export default function Register() {
         <div className="bg-canvas-soft border border-hairline rounded-[8px] p-6 md:p-8">
           {/* Header */}
           <div className="text-center mb-6">
-            <span className="eyebrow-mono text-mute block mb-2">AKUN BARU</span>
-            <h1 className="display-sm text-ink">Daftar</h1>
+            <span className="eyebrow-mono text-mute block mb-2">NEW ACCOUNT</span>
+            <h1 className="display-sm text-ink">Sign Up</h1>
             <p className="text-sm text-body font-display mt-1">
-              Buat akun untuk fitur watchlist dan lainnya
+              Create an account to save watchlists and more
             </p>
           </div>
 
@@ -71,7 +71,7 @@ export default function Register() {
             <Input
               label="Email"
               type="email"
-              placeholder="email@contoh.com"
+              placeholder="email@example.com"
               value={email}
               onChange={(e) => { setEmail(e.target.value); clearError(); setLocalError(''); }}
               required
@@ -80,16 +80,16 @@ export default function Register() {
             <Input
               label="Password"
               type="password"
-              placeholder="Minimal 6 karakter"
+              placeholder="At least 6 characters"
               value={password}
               onChange={(e) => { setPassword(e.target.value); clearError(); setLocalError(''); }}
               required
               autoComplete="new-password"
             />
             <Input
-              label="Konfirmasi Password"
+              label="Confirm Password"
               type="password"
-              placeholder="Ulangi password"
+              placeholder="Repeat password"
               value={confirmPassword}
               onChange={(e) => { setConfirmPassword(e.target.value); setLocalError(''); }}
               required
@@ -102,15 +102,15 @@ export default function Register() {
               fullWidth
               loading={isLoading}
             >
-              Buat Akun
+              Create Account
             </Button>
           </form>
 
           {/* Login link */}
           <p className="text-center text-sm text-body font-display mt-5">
-            Sudah punya akun?{' '}
+            Already have an account?{' '}
             <Link to="/login" className="text-sunset hover:underline">
-              Masuk
+              Sign In
             </Link>
           </p>
         </div>

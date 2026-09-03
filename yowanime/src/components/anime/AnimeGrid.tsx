@@ -23,7 +23,7 @@ export function AnimeGrid({
   isLoading = false,
   hasMore = false,
   onLoadMore,
-  emptyMessage = 'Tidak ada anime ditemukan.',
+  emptyMessage = 'No anime found.',
   className,
 }: AnimeGridProps) {
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -72,10 +72,10 @@ export function AnimeGrid({
       <div
         className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 md:gap-4"
         role="list"
-        aria-label="Daftar anime"
+        aria-label="Anime list"
       >
         {animes.map((anime) => (
-          <div key={anime.id} role="listitem" className="animate-fade-in-up">
+          <div key={anime.id} role="listitem" className="cv-auto">
             <AnimeCard anime={anime} />
           </div>
         ))}
@@ -94,7 +94,7 @@ export function AnimeGrid({
       {/* No more indicator */}
       {!hasMore && animes.length > 0 && !isLoading && onLoadMore && (
         <p className="text-center text-xs text-mute font-mono uppercase tracking-wider py-4">
-          — Semua anime telah dimuat —
+          — All anime loaded —
         </p>
       )}
     </div>

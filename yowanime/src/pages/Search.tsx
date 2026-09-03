@@ -49,8 +49,8 @@ export default function Search() {
       <div className="max-w-[1280px] mx-auto px-6">
         {/* Search header */}
         <div className="mb-8 max-w-2xl mx-auto text-center">
-          <span className="eyebrow-mono text-mute block mb-2">PENCARIAN</span>
-          <h1 className="display-md text-ink mb-6">Cari Anime</h1>
+          <span className="eyebrow-mono text-mute block mb-2">SEARCH</span>
+          <h1 className="display-md text-ink mb-6">Search Anime</h1>
 
           {/* Large search input */}
           <div className="relative">
@@ -65,19 +65,19 @@ export default function Search() {
             </svg>
             <input
               type="search"
-              placeholder="Ketik judul anime, studio, atau genre..."
+              placeholder="Type anime title, studio, or genre..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               className="w-full bg-canvas-soft border border-hairline rounded-full text-ink text-base md:text-lg font-display placeholder:text-mute pl-14 pr-6 py-4 outline-none focus:border-white/30 transition-colors"
               autoFocus
               id="search-input"
-              aria-label="Cari anime"
+              aria-label="Search anime"
             />
             {query && (
               <button
                 onClick={() => setQuery('')}
                 className="absolute right-5 top-1/2 -translate-y-1/2 text-mute hover:text-body transition-colors"
-                aria-label="Hapus pencarian"
+                aria-label="Clear search"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
@@ -90,7 +90,7 @@ export default function Search() {
         {/* Results count */}
         {hasSearched && !isLoading && (
           <p className="text-mute text-xs font-mono uppercase tracking-wider mb-4">
-            {results.length} HASIL UNTUK &quot;{debouncedQuery}&quot;
+            {results.length} RESULTS FOR &quot;{debouncedQuery}&quot;
           </p>
         )}
 
@@ -99,7 +99,7 @@ export default function Search() {
           <AnimeGrid
             animes={results}
             isLoading={isLoading}
-            emptyMessage={`Tidak ditemukan hasil untuk "${debouncedQuery}"`}
+            emptyMessage={`No results found for "${debouncedQuery}"`}
           />
         ) : (
           /* Empty state before search */
@@ -109,8 +109,8 @@ export default function Search() {
                 <circle cx="11" cy="11" r="8" /><path d="M21 21l-4.35-4.35" strokeLinecap="round" />
               </svg>
             </div>
-            <p className="text-body text-sm font-display">Mulai ketik untuk mencari anime favoritmu</p>
-            <p className="text-mute text-xs font-display mt-1">Cari berdasarkan judul, studio, atau genre</p>
+            <p className="text-body text-sm font-display">Start typing to search your favorite anime</p>
+            <p className="text-mute text-xs font-display mt-1">Search by title, studio, or genre</p>
           </div>
         )}
       </div>

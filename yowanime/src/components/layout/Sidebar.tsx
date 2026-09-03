@@ -35,11 +35,11 @@ export function Sidebar({ episodes, currentEpisodeNumber, animeSlug, isOpen, onC
           'fixed right-0 top-14 bottom-0 w-72 z-40 transition-transform duration-300 lg:static lg:w-full lg:translate-x-0',
           isOpen ? 'translate-x-0' : 'translate-x-full'
         )}
-        aria-label="Daftar episode"
+        aria-label="Episode list"
       >
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-hairline">
-          <span className="eyebrow-mono text-mute">DAFTAR EPISODE</span>
+          <span className="eyebrow-mono text-mute">EPISODE LIST</span>
           <span className="text-xs text-mute font-mono">{episodes.length} EP</span>
         </div>
 

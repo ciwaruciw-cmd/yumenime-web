@@ -1,9 +1,9 @@
 /**
- * Format ISO date string into a readable Indonesian date.
+ * Format ISO date string into a readable English date.
  */
 export function formatDate(iso: string): string {
   const date = new Date(iso);
-  return new Intl.DateTimeFormat('id-ID', {
+  return new Intl.DateTimeFormat('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -31,9 +31,9 @@ export function formatMinutes(minutes: number): string {
   if (minutes >= 60) {
     const h = Math.floor(minutes / 60);
     const m = minutes % 60;
-    return m > 0 ? `${h}j ${m}m` : `${h} jam`;
+    return m > 0 ? `${h}h ${m}m` : `${h} hr`;
   }
-  return `${minutes} menit`;
+  return `${minutes} min`;
 }
 
 /**

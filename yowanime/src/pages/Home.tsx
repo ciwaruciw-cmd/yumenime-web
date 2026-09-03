@@ -67,16 +67,16 @@ export default function Home() {
       {/* Trending section — horizontal scroll */}
       <AnimeSection
         eyebrow="TRENDING"
-        title="Sedang Populer"
+        title="Trending Now"
         animes={trending}
         viewAllHref="/anime?sort=popular"
         horizontal
       />
 
-      {/* Baru Update section — horizontal scroll */}
+      {/* Latest Updates section — horizontal scroll */}
       <AnimeSection
-        eyebrow="BARU UPDATE"
-        title="Episode Terbaru"
+        eyebrow="LATEST UPDATES"
+        title="New Episodes"
         animes={newUpdate}
         viewAllHref="/anime?sort=latest"
         horizontal
@@ -85,8 +85,8 @@ export default function Home() {
       {/* Genre Populer section */}
       <section className="py-8 md:py-12">
         <div className="max-w-[1280px] mx-auto px-6">
-          <span className="eyebrow-mono text-mute block mb-1">GENRE</span>
-          <h2 className="display-sm text-ink mb-6">Jelajahi Genre</h2>
+          <span className="eyebrow-mono text-mute block mb-1">GENRES</span>
+          <h2 className="display-sm text-ink mb-6">Explore Genres</h2>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
             {genres.map((genre) => (
@@ -99,7 +99,7 @@ export default function Home() {
                   {genre}
                 </Badge>
                 <p className="text-mute text-[10px] font-mono uppercase tracking-wider group-hover:text-body transition-colors">
-                  Lihat →
+                  Explore →
                 </p>
               </Link>
             ))}
@@ -129,7 +129,7 @@ export default function Home() {
                 ),
               },
               {
-                label: 'EPISODE',
+                label: 'EPISODES',
                 value: '1000+',
                 icon: (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-sunset">
@@ -139,7 +139,7 @@ export default function Home() {
                 ),
               },
               {
-                label: 'GENRE',
+                label: 'GENRES',
                 value: `${genres.length}`,
                 icon: (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-sunset">
@@ -149,7 +149,7 @@ export default function Home() {
                 ),
               },
               {
-                label: 'GRATIS',
+                label: 'FREE STREAMING',
                 value: '100%',
                 icon: (
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-sunset">

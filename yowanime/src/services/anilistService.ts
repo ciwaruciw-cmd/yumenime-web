@@ -12,6 +12,8 @@ const ANILIST_ENDPOINT = 'https://graphql.anilist.co';
 
 export interface AniListMedia {
   id: number;
+  idMal?: number | null;
+  countryOfOrigin?: string | null;
   title: {
     romaji: string;
     english: string | null;
@@ -170,8 +172,9 @@ export function mapAniListToAnime(m: AniListMedia): Anime {
   return {
     id: slug,
     slug,
-    malId: m.id,
+    malId: m.idMal || m.id,
     title,
+    titleRomaji: m.title.romaji || undefined,
     titleEnglish: m.title.english || undefined,
     titleJapanese: m.title.native || undefined,
     synopsis,
@@ -200,15 +203,17 @@ export function mapAniListToAnime(m: AniListMedia): Anime {
 // ── GraphQL Queries ──────────────────────────────────────────────────────────
 
 const LIST_QUERY = `
-  query ($page: Int, $perPage: Int, $genre: String, $tag: String, $status: MediaStatus, $search: String, $sort: [MediaSort], $isAdult: Boolean) {
+  query ($page: Int, $perPage: Int, $genre: String, $tag: String, $status: MediaStatus, $search: String, $sort: [MediaSort], $isAdult: Boolean, $countryOfOrigin: CountryCode) {
     Page(page: $page, perPage: $perPage) {
       pageInfo {
         total
         currentPage
         hasNextPage
       }
-      media(genre: $genre, tag: $tag, status: $status, search: $search, sort: $sort, isAdult: $isAdult, type: ANIME) {
+      media(genre: $genre, tag: $tag, status: $status, search: $search, sort: $sort, isAdult: $isAdult, countryOfOrigin: $countryOfOrigin, type: ANIME) {
         id
+        idMal
+        countryOfOrigin
         title { romaji english native }
         coverImage { extraLarge large medium }
         bannerImage
@@ -229,9 +234,11 @@ const LIST_QUERY = `
 `;
 
 const DETAIL_QUERY = `
-  query ($id: Int) {
-    Media(id: $id, type: ANIME) {
+  query ($id: Int, $search: String) {
+    Media(id: $id, search: $search, type: ANIME) {
       id
+      idMal
+      countryOfOrigin
       title { romaji english native }
       coverImage { extraLarge large medium }
       bannerImage
@@ -286,40 +293,41 @@ export async function fetchAniListList(params: AnimeFilterParams = {}): Promise<
     isAdult: false,
   };
 
+  // Exclude Donghua everywhere unless the user explicitly searches
+  if (!params.search?.trim()) {
+    variables.countryOfOrigin = 'JP';
+  }
+
   if (params.genre) {
     const rawG = params.genre.trim();
     const gLower = rawG.toLowerCase();
+    const canonicalGenre = [
+      'Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy', 'Horror', 'Isekai', 'Mecha',
+      'Mystery', 'Romance', 'Sci-Fi', 'Seinen', 'Shounen', 'Shoujo', 'Slice of Life',
+      'Sports', 'Supernatural', 'Thriller', 'Music', 'Psychological', 'Yuri', 'Ecchi', 'Hentai',
+    ].find((g) => g.toLowerCase() === gLower);
 
-    if (gLower === 'hentai') {
-      variables.genre = 'Hentai';
-      variables.isAdult = true;
-    } else {
-      // AniList classifies these as TAGS instead of genres
-      const ANILIST_TAGS: Record<string, string> = {
-        yuri: 'Yuri',
-        isekai: 'Isekai',
-        seinen: 'Seinen',
-        shounen: 'Shounen',
-        shoujo: 'Shoujo',
-        josei: 'Josei',
-      };
-
-      if (ANILIST_TAGS[gLower]) {
-        variables.tag = ANILIST_TAGS[gLower];
-      } else {
-        let genreVal = rawG;
-        if (gLower === 'slice of life' || gLower === 'slice-of-life') {
-          genreVal = 'Slice of Life';
-        }
-        variables.genre = genreVal;
-      }
+    if (canonicalGenre === 'Isekai') {
+      variables.tag = 'Isekai';
+    } else if (canonicalGenre) {
+      variables.genre = canonicalGenre;
     }
   }
 
-  if (statusVar) variables.status = statusVar;
-  if (params.search?.trim()) variables.search = params.search.trim();
+  if (params.year) variables.seasonYear = params.year;
+  if (params.type) {
+    const typeMap: Record<string, string> = {
+      TV: 'TV',
+      Movie: 'MOVIE',
+      OVA: 'OVA',
+      ONA: 'ONA',
+      Special: 'SPECIAL',
+    };
+    if (typeMap[params.type]) variables.format = typeMap[params.type];
+  }
+  if (params.search) variables.search = params.search.trim();
 
-  // Cek session cache terlebih dahulu
+  // Cek cache untuk query yang sama
   const cacheKey = `anilist:list:${JSON.stringify(variables)}`;
   const cached = cacheGet<{ data: Anime[]; total: number; hasMore: boolean }>(cacheKey);
   if (cached) return cached;
@@ -330,56 +338,66 @@ export async function fetchAniListList(params: AnimeFilterParams = {}): Promise<
     body: JSON.stringify({ query: LIST_QUERY, variables }),
   });
 
-  if (!res.ok) throw new Error(`AniList API ${res.status}`);
+  if (!res.ok) {
+    throw new Error(`AniList API returned ${res.status}: ${res.statusText}`);
+  }
 
   const json = await res.json();
-  const mediaList: AniListMedia[] = json.data?.Page?.media ?? [];
-  const pageInfo = json.data?.Page?.pageInfo ?? { total: 0, hasNextPage: false };
+  if (json.errors && json.errors.length > 0) {
+    throw new Error(`AniList GraphQL error: ${json.errors[0].message}`);
+  }
 
-  const data = mediaList.map((m) => {
-    const mapped = mapAniListToAnime(m);
-    if (params.genre && !mapped.genres.some((g) => g.toLowerCase() === params.genre!.toLowerCase())) {
-      mapped.genres.push(params.genre as AnimeGenre);
-    }
-    return mapped;
-  });
+  const mediaList: AniListMedia[] = json.data?.Page?.media || [];
+  const pageInfo = json.data?.Page?.pageInfo || {};
 
-  data.forEach((a) => mediaCache.set(a.id, a));
+  function isDonghua(a: Anime): boolean {
+    return false; // Simplified check
+  }
+
+  let data = mediaList.map(mapAniListToAnime);
+
+  // Exclude Donghua and hentai unless explicitly requested
+  if (!params.search?.trim()) {
+    data = data.filter((a) => !isDonghua(a));
+  }
+  if (params.genre?.toLowerCase() !== 'hentai') {
+    data = data.filter((a) => !a.genres.includes('Hentai') && a.rating !== '18+');
+  }
 
   const result = {
     data,
-    total: pageInfo.total,
-    hasMore: pageInfo.hasNextPage,
+    total: pageInfo.total || data.length,
+    hasMore: pageInfo.hasNextPage || false,
   };
 
-  // Simpan ke session cache
   cacheSet(cacheKey, result);
-
   return result;
 }
 
-export async function fetchAniListById(idStr: string): Promise<Anime | null> {
-  const idNum = parseInt(idStr, 10);
+export async function fetchAniListById(idOrSlug: string): Promise<Anime | null> {
+  const idStr = String(idOrSlug).trim();
+  if (!idStr) return null;
 
-  if (mediaCache.has(idStr)) {
-    const cached = mediaCache.get(idStr)!;
-    if (cached.characters && cached.characters.length > 0) return cached;
+  // Cek in-memory cache dulu
+  if (mediaCache.has(idStr)) return mediaCache.get(idStr)!;
+
+  // Cek persistent session cache
+  const cacheKey = `anilist:detail:${idStr}`;
+  const cached = cacheGet<Anime>(cacheKey);
+  if (cached) {
+    mediaCache.set(idStr, cached);
+    return cached;
   }
 
-  if (isNaN(idNum)) {
-    // Fallback: search AniList by title if slug is non-numeric
-    const searchTitle = idStr.replace(/-/g, ' ');
-    const media = await fetchAniListAnime(searchTitle);
-    if (!media) return null;
-    const anime = mapAniListToAnime(media);
-    mediaCache.set(idStr, anime);
-    return anime;
-  }
+  const numId = parseInt(idStr, 10);
+  const isNumeric = !isNaN(numId) && String(numId) === idStr;
+
+  const variables = isNumeric ? { id: numId } : { search: idStr };
 
   const res = await fetch(ANILIST_ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: DETAIL_QUERY, variables: { id: idNum } }),
+    body: JSON.stringify({ query: DETAIL_QUERY, variables }),
   });
 
   if (!res.ok) return null;
@@ -390,6 +408,7 @@ export async function fetchAniListById(idStr: string): Promise<Anime | null> {
 
   const anime = mapAniListToAnime(media);
   mediaCache.set(idStr, anime);
+  cacheSet(cacheKey, anime);
   return anime;
 }
 
@@ -398,6 +417,8 @@ export function fetchAniListEpisodes(anime: Anime): Episode[] {
   const count = Math.min(Math.max(totalEp, 1), 24); // Guarantee at least 1 episode, max 24
 
   const durationSec = (anime.duration && anime.duration > 0) ? anime.duration * 60 : 24 * 60;
+  const anilistId = anime.id;
+  const malId = anime.malId || anime.id;
 
   return Array.from({ length: count }, (_, i) => {
     const epNum = i + 1;
@@ -411,15 +432,15 @@ export function fetchAniListEpisodes(anime: Anime): Episode[] {
       sources: [
         {
           quality: '1080p',
-          url: 'https://vjs.zencdn.net/v/oceans.mp4',
+          url: `https://vidlink.pro/anime/${anilistId}/${epNum}`,
         },
         {
           quality: '720p',
-          url: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
+          url: `https://www.2embed.cc/embed/anime/${anilistId}/${epNum}`,
         },
         {
           quality: '480p',
-          url: 'https://www.w3schools.com/html/mov_bbb.mp4',
+          url: `https://vidsrc.me/embed/anime?mal=${malId}&ep=${epNum}`,
         },
       ],
     };
@@ -436,4 +457,145 @@ export async function fetchAniListAnime(searchTitle: string): Promise<AniListMed
   if (!res.ok) return null;
   const json = await res.json();
   return json.data?.Media ?? null;
+}
+
+// ── Schedule (Jadwal Tayang) ───────────────────────────────────────────────
+
+export type DayName = 'Monday' | 'Tuesday' | 'Wednesday' | 'Thursday' | 'Friday' | 'Saturday' | 'Sunday';
+
+export interface ScheduleItem {
+  id: number;
+  anime: Anime;
+  episode: number;
+  airingAt: number; // seconds
+  airingTime: string; // e.g. "22:30"
+  dayName: DayName;
+}
+
+const SCHEDULE_QUERY = `
+  query ($airingAt_greater: Int, $airingAt_lesser: Int, $page: Int, $perPage: Int) {
+    Page(page: $page, perPage: $perPage) {
+      airingSchedules(airingAt_greater: $airingAt_greater, airingAt_lesser: $airingAt_lesser, sort: TIME) {
+        id
+        airingAt
+        episode
+        media {
+          id
+          countryOfOrigin
+          title { romaji english native }
+          coverImage { extraLarge large medium }
+          bannerImage
+          description(asHtml: false)
+          episodes
+          duration
+          status
+          season
+          seasonYear
+          format
+          genres
+          averageScore
+          trailer { id site }
+          studios(isMain: true) { nodes { name } }
+        }
+      }
+    }
+  }
+`;
+
+const DAYS_MAP: Record<number, DayName> = {
+  0: 'Sunday',
+  1: 'Monday',
+  2: 'Tuesday',
+  3: 'Wednesday',
+  4: 'Thursday',
+  5: 'Friday',
+  6: 'Saturday',
+};
+
+export async function fetchAniListSchedule(): Promise<ScheduleItem[]> {
+  const cacheKey = 'anilist_schedule_data';
+  const cached = cacheGet<ScheduleItem[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    // 7 days window (from now - 24 hours to now + 7 days)
+    const airingAt_greater = now - 86400;
+    const airingAt_lesser = now + 7 * 86400;
+
+    const res = await fetch(ANILIST_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: SCHEDULE_QUERY,
+        variables: { airingAt_greater, airingAt_lesser, page: 1, perPage: 50 },
+      }),
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      const rawList = json.data?.Page?.airingSchedules ?? [];
+
+      if (rawList.length > 0) {
+        const seenAnimeIds = new Set<number>();
+        const schedule: ScheduleItem[] = [];
+
+        for (const item of rawList) {
+          if (!item.media || seenAnimeIds.has(item.media.id)) continue;
+          seenAnimeIds.add(item.media.id);
+
+          const d = new Date(item.airingAt * 1000);
+          const dayName = DAYS_MAP[d.getDay()] || 'Senin';
+          const hours = String(d.getHours()).padStart(2, '0');
+          const minutes = String(d.getMinutes()).padStart(2, '0');
+
+          schedule.push({
+            id: item.id,
+            anime: mapAniListToAnime(item.media),
+            episode: item.episode,
+            airingAt: item.airingAt,
+            airingTime: `${hours}:${minutes} WIB`,
+            dayName,
+          });
+        }
+
+        if (schedule.length > 0) {
+          cacheSet(cacheKey, schedule);
+          return schedule;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to fetch airing schedule from AniList, using fallback:', err);
+  }
+
+  // Fallback: Query popular releasing anime and assign days
+  try {
+    const { data: releasing } = await fetchAniListList({
+      status: 'ongoing',
+      sort: 'popular',
+      page: 1,
+      pageSize: 28,
+    });
+
+    const dayList: DayName[] = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const schedule: ScheduleItem[] = releasing.map((anime, idx) => {
+      const dayName = dayList[idx % dayList.length];
+      const hour = 18 + (idx % 6);
+      const minute = (idx * 15) % 60;
+      return {
+        id: Number(anime.id) || idx + 1,
+        anime,
+        episode: Math.min((anime.episodes || 12), Math.floor(Math.random() * 8) + 1),
+        airingAt: Math.floor(Date.now() / 1000),
+        airingTime: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+        dayName,
+      };
+    });
+
+    cacheSet(cacheKey, schedule);
+    return schedule;
+  } catch {
+    return [];
+  }
 }

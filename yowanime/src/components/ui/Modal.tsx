@@ -8,6 +8,7 @@ interface ModalProps {
   title?: string;
   children: ReactNode;
   size?: 'sm' | 'md' | 'lg';
+  showCloseButton?: boolean;
   className?: string;
 }
 
@@ -15,7 +16,7 @@ interface ModalProps {
  * Modal — canvas-soft card with backdrop blur.
  * Closes on Escape key or backdrop click.
  */
-export function Modal({ isOpen, onClose, title, children, size = 'md', className }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, size = 'md', showCloseButton = true, className }: ModalProps) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -50,7 +51,7 @@ export function Modal({ isOpen, onClose, title, children, size = 'md', className
     >
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/80"
         onClick={onClose}
         aria-hidden="true"
       />
@@ -65,22 +66,26 @@ export function Modal({ isOpen, onClose, title, children, size = 'md', className
         )}
       >
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          {title && (
-            <h2 className="text-base font-display text-ink">{title}</h2>
-          )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onClose}
-            className="ml-auto p-1.5 h-auto rounded-full"
-            aria-label="Tutup modal"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
-            </svg>
-          </Button>
-        </div>
+        {(title || showCloseButton) && (
+          <div className="flex items-center justify-between mb-4">
+            {title && (
+              <h2 className="text-base font-display text-ink">{title}</h2>
+            )}
+            {showCloseButton && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onClose}
+                className="ml-auto p-1.5 h-auto rounded-full text-mute hover:text-ink"
+                aria-label="Close modal"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+                </svg>
+              </Button>
+            )}
+          </div>
+        )}
 
         {children}
       </div>

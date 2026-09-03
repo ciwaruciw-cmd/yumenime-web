@@ -17,12 +17,12 @@ interface EpisodeListProps {
 export function EpisodeList({ episodes, animeSlug, currentEpisodeNumber, compact = false }: EpisodeListProps) {
   if (episodes.length === 0) {
     return (
-      <p className="text-mute text-sm font-display py-4">Belum ada episode tersedia.</p>
+      <p className="text-mute text-sm font-display py-4">No episodes available.</p>
     );
   }
 
   return (
-    <div className="space-y-1" role="list" aria-label="Daftar episode">
+    <div className="space-y-1" role="list" aria-label="Episode list">
       {episodes.map((ep) => {
         const isActive = ep.number === currentEpisodeNumber;
 
@@ -54,12 +54,17 @@ export function EpisodeList({ episodes, animeSlug, currentEpisodeNumber, compact
 
             {/* Thumbnail (non-compact only) */}
             {!compact && ep.thumbnail && (
-              <div className="shrink-0 w-20 h-12 rounded overflow-hidden bg-canvas-mid">
+              <div className="shrink-0 w-20 h-12 rounded overflow-hidden bg-canvas-mid relative">
                 <img
                   src={ep.thumbnail}
-                  alt=""
+                  alt={ep.title || `Episode ${ep.number}`}
                   className="w-full h-full object-cover"
                   loading="lazy"
+                  onError={(e) => {
+                    // Hide broken image gracefully
+                    const target = e.currentTarget;
+                    target.style.display = 'none';
+                  }}
                 />
               </div>
             )}
@@ -75,7 +80,7 @@ export function EpisodeList({ episodes, animeSlug, currentEpisodeNumber, compact
               </p>
               <p className="text-[10px] text-mute font-mono mt-0.5">
                 {formatDuration(ep.duration)}
-                {ep.aired ? ` · ${new Date(ep.aired).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                {ep.aired ? ` · ${new Date(ep.aired).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
               </p>
             </div>
 

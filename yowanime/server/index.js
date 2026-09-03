@@ -7,6 +7,8 @@ import express from 'express';
 import cors from 'cors';
 import pg from 'pg';
 import dotenv from 'dotenv';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 
 dotenv.config();
 
@@ -14,6 +16,7 @@ const { Pool } = pg;
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const JWT_SECRET = process.env.JWT_SECRET || 'yowanime-jwt-secret-key-2026-production';
 
 // PostgreSQL Connection Pool
 const pool = new Pool({
@@ -22,6 +25,61 @@ const pool = new Pool({
 
 app.use(cors());
 app.use(express.json());
+
+// ── Authentication & Authorization Middlewares ───────────────────────────────
+
+/**
+ * Express middleware to authenticate JWT token.
+ * Extracts user identity from cryptographically verified token.
+ */
+export function authenticateToken(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).json({ error: 'Akses ditolak. Token tidak ditemukan.' });
+  }
+
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+  if (!token) {
+    return res.status(401).json({ error: 'Format token tidak valid.' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded; // { id, email, role }
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Token tidak valid atau telah kedaluwarsa.' });
+  }
+}
+
+/**
+ * Express middleware to enforce admin role.
+ * Verifies role directly against database for authoritative source of truth.
+ */
+export async function requireAdmin(req, res, next) {
+  if (!req.user || !req.user.id) {
+    return res.status(401).json({ error: 'Akses ditolak. Belum terautentikasi.' });
+  }
+
+  try {
+    const userRes = await pool.query('SELECT role FROM users WHERE id = $1', [req.user.id]);
+    if (userRes.rows.length === 0) {
+      return res.status(401).json({ error: 'User tidak ditemukan di sistem.' });
+    }
+
+    const currentRole = userRes.rows[0].role;
+    if (currentRole !== 'admin') {
+      return res.status(403).json({ error: 'Akses ditolak. Diperlukan hak akses Admin.' });
+    }
+
+    req.user.role = 'admin';
+    next();
+  } catch (err) {
+    return res.status(500).json({ error: 'Gagal memverifikasi hak akses admin.' });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Healthcheck
 app.get('/api/health', async (req, res) => {
@@ -184,6 +242,8 @@ app.get('/api/genres', async (req, res) => {
   }
 });
 
+// ── Auth Endpoints ────────────────────────────────────────────────────────────
+
 // POST /api/auth/register
 app.post('/api/auth/register', async (req, res) => {
   try {
@@ -192,22 +252,40 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(400).json({ error: 'Username, email, dan password wajib diisi.' });
     }
 
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password minimal 6 karakter.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanUsername = username.trim();
+
     // Check if user exists
-    const existing = await pool.query('SELECT * FROM users WHERE email = $1 OR username = $2', [email, username]);
+    const existing = await pool.query('SELECT id FROM users WHERE email = $1 OR username = $2', [cleanEmail, cleanUsername]);
     if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'Email atau username sudah terdaftar.' });
     }
 
+    // Hash password with bcrypt salt rounds 10
+    const passwordHash = await bcrypt.hash(password, 10);
+
     // Insert user into PostgreSQL database
     const newUser = await pool.query(
-      `INSERT INTO users (username, email, password_hash, avatar_url)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO users (username, email, password_hash, avatar_url, role)
+       VALUES ($1, $2, $3, $4, 'user')
        RETURNING id, username, email, avatar_url, role, created_at`,
-      [username, email, password, `https://picsum.photos/seed/${username}/80/80`]
+      [cleanUsername, cleanEmail, passwordHash, `https://picsum.photos/seed/${cleanUsername}/80/80`]
     );
 
     const user = newUser.rows[0];
-    res.json({
+
+    // Generate cryptographic signed JWT
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.status(201).json({
       user: {
         id: user.id,
         username: user.username,
@@ -215,8 +293,9 @@ app.post('/api/auth/register', async (req, res) => {
         avatar: user.avatar_url,
         createdAt: user.created_at,
         role: user.role,
+        isAdmin: user.role === 'admin',
       },
-      token: `pg-jwt-token-${user.id}`,
+      token,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -227,15 +306,37 @@ app.post('/api/auth/register', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const userRes = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email dan password wajib diisi.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const userRes = await pool.query('SELECT * FROM users WHERE email = $1', [cleanEmail]);
     if (userRes.rows.length === 0) {
       return res.status(401).json({ error: 'Email atau password salah.' });
     }
 
     const user = userRes.rows[0];
-    if (user.password_hash !== password) {
+
+    // Verify password with bcrypt. Also supports migrating legacy plaintext passwords if any exist.
+    let isMatch = await bcrypt.compare(password, user.password_hash);
+    if (!isMatch && user.password_hash === password) {
+      // Legacy plaintext password detected; upgrade to bcrypt hash
+      const upgradedHash = await bcrypt.hash(password, 10);
+      await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [upgradedHash, user.id]);
+      isMatch = true;
+    }
+
+    if (!isMatch) {
       return res.status(401).json({ error: 'Email atau password salah.' });
     }
+
+    // Generate cryptographic signed JWT
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     res.json({
       user: {
@@ -245,13 +346,238 @@ app.post('/api/auth/login', async (req, res) => {
         avatar: user.avatar_url,
         createdAt: user.created_at,
         role: user.role,
+        isAdmin: user.role === 'admin',
       },
-      token: `pg-jwt-token-${user.id}`,
+      token,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ── Comment Endpoints ─────────────────────────────────────────────────────────
+
+// GET /api/comments/:animeId — fetch comments, optionally filter by episodeId (Public)
+app.get('/api/comments/:animeId', async (req, res) => {
+  try {
+    const { animeId } = req.params;
+    const { episodeId } = req.query;
+
+    let query = `
+      SELECT c.id, c.content, c.created_at, c.user_id, c.anime_id, c.episode_id,
+             u.username, u.avatar_url,
+             CASE WHEN u.role = 'admin' THEN true ELSE false END AS is_admin
+      FROM comments c
+      JOIN users u ON c.user_id = u.id
+      WHERE c.anime_id = $1`;
+    const params = [animeId];
+
+    if (episodeId) {
+      query += ` AND c.episode_id = $2`;
+      params.push(episodeId);
+    }
+
+    query += ` ORDER BY c.created_at DESC`;
+
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/comments — create a new comment (Requires valid JWT)
+app.post('/api/comments', authenticateToken, async (req, res) => {
+  try {
+    const { animeId, episodeId, content } = req.body;
+    // Derive identity strictly from verified token
+    const userId = req.user.id;
+
+    if (!animeId || !content?.trim()) {
+      return res.status(400).json({ error: 'animeId dan content wajib diisi.' });
+    }
+
+    const result = await pool.query(
+      `INSERT INTO comments (user_id, anime_id, episode_id, content)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, user_id, anime_id, episode_id, content, created_at`,
+      [userId, animeId, episodeId ?? null, content.trim()]
+    );
+
+    // Join with user data for response
+    const userRes = await pool.query(
+      `SELECT username, avatar_url, role FROM users WHERE id = $1`,
+      [userId]
+    );
+
+    const comment = result.rows[0];
+    const user = userRes.rows[0];
+
+    res.status(201).json({
+      ...comment,
+      username: user?.username ?? 'User',
+      avatar_url: user?.avatar_url ?? null,
+      is_admin: user?.role === 'admin',
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/comments/:commentId — delete a comment (Owner or Admin only)
+app.delete('/api/comments/:commentId', authenticateToken, async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const userId = req.user.id;
+
+    // Fetch comment to check ownership
+    const commentRes = await pool.query('SELECT * FROM comments WHERE id = $1', [commentId]);
+    if (commentRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Komentar tidak ditemukan.' });
+    }
+
+    const comment = commentRes.rows[0];
+
+    // Check if user is owner or server-verified admin
+    const userRes = await pool.query('SELECT role FROM users WHERE id = $1', [userId]);
+    const userRole = userRes.rows[0]?.role ?? 'user';
+    const isOwner = comment.user_id === userId;
+    const isAdmin = userRole === 'admin';
+
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Akses ditolak. Anda tidak diizinkan menghapus komentar ini.' });
+    }
+
+    await pool.query('DELETE FROM comments WHERE id = $1', [commentId]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Admin Endpoints ───────────────────────────────────────────────────────────
+
+// GET /api/admin/emails (Admin only)
+app.get('/api/admin/emails', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query("SELECT email FROM users WHERE role = 'admin' ORDER BY created_at ASC");
+    res.json(result.rows.map(r => r.email));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/admin/emails (Admin only)
+app.post('/api/admin/emails', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { email } = req.body;
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      return res.status(400).json({ error: 'Email wajib diisi.' });
+    }
+
+    await pool.query("UPDATE users SET role = 'admin' WHERE email = $1", [cleanEmail]);
+    const result = await pool.query("SELECT email FROM users WHERE role = 'admin' ORDER BY created_at ASC");
+    res.json({ success: true, emails: result.rows.map(r => r.email) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/admin/emails/:email (Admin only)
+app.delete('/api/admin/emails/:email', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { email } = req.params;
+    const cleanEmail = decodeURIComponent(email).trim().toLowerCase();
+
+    // Prevent removing the last admin
+    const adminCountRes = await pool.query("SELECT COUNT(*) FROM users WHERE role = 'admin'");
+    const totalAdmins = parseInt(adminCountRes.rows[0].count, 10);
+    if (totalAdmins <= 1) {
+      return res.status(400).json({ error: 'Tidak dapat menghapus admin terakhir.' });
+    }
+
+    await pool.query("UPDATE users SET role = 'user' WHERE email = $1", [cleanEmail]);
+    const result = await pool.query("SELECT email FROM users WHERE role = 'admin' ORDER BY created_at ASC");
+    res.json({ success: true, emails: result.rows.map(r => r.email) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Notifications Endpoints ───────────────────────────────────────────────────
+
+// GET /api/notifications (Public)
+app.get('/api/notifications', async (req, res) => {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id VARCHAR(64) PRIMARY KEY,
+        type VARCHAR(20) DEFAULT 'info',
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    const result = await pool.query(
+      `SELECT id, type, title, message, created_at AS "createdAt"
+       FROM notifications
+       ORDER BY created_at DESC
+       LIMIT 50`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/notifications (Admin only)
+app.post('/api/notifications', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { type, title, message } = req.body;
+    if (!title?.trim() || !message?.trim()) {
+      return res.status(400).json({ error: 'Title dan message wajib diisi.' });
+    }
+
+    const notifId = `notif-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const notifType = type || 'info';
+
+    const result = await pool.query(
+      `INSERT INTO notifications (id, type, title, message, created_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       RETURNING id, type, title, message, created_at AS "createdAt"`,
+      [notifId, notifType, title.trim(), message.trim()]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/notifications/:id (Admin only)
+app.delete('/api/notifications/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM notifications WHERE id = $1', [id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/notifications (Admin only - delete all)
+app.delete('/api/notifications', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    await pool.query('DELETE FROM notifications');
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 app.listen(PORT, () => {
   console.log(`Yowanime PostgreSQL API Server running on http://localhost:${PORT}`);

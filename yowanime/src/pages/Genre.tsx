@@ -1,4 +1,6 @@
-import { Link } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { AgeVerificationModal } from '@/components/common/AgeVerificationModal';
 
 /**
  * Genre list page — all genres as pill cards.
@@ -31,45 +33,39 @@ const GENRES = [
   { name: 'Hentai', slug: 'hentai' },
 ];
 
-const genreAccent = (name: string): string => {
-  const map: Record<string, string> = {
-    Action: 'border-l-sunset',
-    Adventure: 'border-l-breeze',
-    Comedy: 'border-l-sunset-soft',
-    Drama: 'border-l-twilight',
-    Fantasy: 'border-l-dusk',
-    Horror: 'border-l-red-500',
-    Isekai: 'border-l-breeze',
-    Mecha: 'border-l-canvas-mid',
-    Mystery: 'border-l-dusk',
-    Romance: 'border-l-pink-400',
-    'Sci-Fi': 'border-l-breeze',
-    Seinen: 'border-l-canvas-mid',
-    Shounen: 'border-l-sunset',
-    Shoujo: 'border-l-pink-400',
-    'Slice of Life': 'border-l-green-400',
-    Sports: 'border-l-breeze',
-    Supernatural: 'border-l-twilight',
-    Thriller: 'border-l-red-400',
-    Music: 'border-l-sunset-soft',
-    Psychological: 'border-l-dusk',
-    Yuri: 'border-l-pink-400',
-    Ecchi: 'border-l-rose-500',
-    Hentai: 'border-l-red-600',
-  };
-  return map[name] ?? 'border-l-hairline';
-};
-
 export default function Genre() {
+  const navigate = useNavigate();
+  const [showAgeModal, setShowAgeModal] = useState(false);
+
+  const handleGenreClick = (e: React.MouseEvent, name: string) => {
+    if (name.toLowerCase() === 'hentai') {
+      const isVerified = sessionStorage.getItem('age_verified_18') === 'true';
+      if (!isVerified) {
+        e.preventDefault();
+        setShowAgeModal(true);
+      }
+    }
+  };
+
+  const handleConfirmAge = () => {
+    sessionStorage.setItem('age_verified_18', 'true');
+    setShowAgeModal(false);
+    navigate('/anime?genre=Hentai');
+  };
+
+  const handleCancelAge = () => {
+    setShowAgeModal(false);
+  };
+
   return (
     <div className="page-enter pt-20 min-h-screen">
       <div className="max-w-[1280px] mx-auto px-6">
         {/* Header */}
         <div className="mb-8">
           <span className="eyebrow-mono text-mute block mb-1">BROWSE</span>
-          <h1 className="display-md text-ink">Semua Genre</h1>
+          <h1 className="display-md text-ink">All Genres</h1>
           <p className="text-body text-sm font-display mt-2">
-            Jelajahi anime berdasarkan genre favoritmu
+            Explore anime by your favorite genre
           </p>
         </div>
 
@@ -79,6 +75,7 @@ export default function Genre() {
             <Link
               key={name}
               to={`/anime?genre=${encodeURIComponent(name)}`}
+              onClick={(e) => handleGenreClick(e, name)}
               className="group bg-canvas-card rounded-[8px] p-5 hover:bg-canvas-soft transition-all duration-200"
             >
               <h2 className="text-sm font-display text-ink group-hover:text-ink mb-1">
@@ -91,6 +88,13 @@ export default function Genre() {
           ))}
         </div>
       </div>
+
+      {/* 18+ Age Verification Warning Alert Modal */}
+      <AgeVerificationModal
+        isOpen={showAgeModal}
+        onConfirm={handleConfirmAge}
+        onCancel={handleCancelAge}
+      />
     </div>
   );
 }

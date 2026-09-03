@@ -2,11 +2,13 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { Button } from '@/components/ui/Button';
+import { NotificationBell, NotifItem } from '@/components/ui/NotificationBell';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useWatchlistStore } from '@/store/useWatchlistStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { searchAnime } from '@/services/animeService';
 import { useDebounce } from '@/hooks/useDebounce';
-import { isAdminEmail } from '@/config/adminConfig';
+import { isAdminEmail, syncAdminEmailsFromServer } from '@/config/adminConfig';
 import type { Anime } from '@/types/anime';
 
 /**
@@ -15,6 +17,7 @@ import type { Anime } from '@/types/anime';
  */
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mobileNotifOpen, setMobileNotifOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Anime[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -26,12 +29,28 @@ export function Navbar() {
 
   const { isAuthenticated, user, logout } = useAuthStore();
   const { animeIds } = useWatchlistStore();
-  const debouncedSearch = useDebounce(searchQuery, 300);
-  const isAdmin = isAdminEmail(user?.email);
+  const { notifications, unreadCount, markRead, markAllRead, removeNotification, clearAll } = useNotificationStore();
+  const notifUnreadCount = unreadCount();
 
-  // Detect scroll for navbar transparency
+  const debouncedSearch = useDebounce(searchQuery, 300);
+  const isAdmin = user?.role === 'admin' || user?.isAdmin === true || isAdminEmail(user?.email);
+
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 20);
+    syncAdminEmailsFromServer();
+  }, []);
+
+  // Detect scroll for navbar transparency with requestAnimationFrame throttle
+  useEffect(() => {
+    let ticking = false;
+    const onScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          setScrolled(window.scrollY > 20);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
@@ -61,8 +80,8 @@ export function Navbar() {
 
   const navLinks = [
     { to: '/anime', label: 'Anime' },
-    { to: '/genre', label: 'Genre' },
-    { to: '/schedule', label: 'Jadwal' },
+    { to: '/genre', label: 'Genres' },
+    { to: '/schedule', label: 'Schedule' },
   ];
 
   const handleSearchSelect = (slug: string) => {
@@ -83,25 +102,20 @@ export function Navbar() {
   return (
     <header
       className={clsx(
-        'fixed top-0 left-0 right-0 z-40 transition-all duration-300',
+        'fixed top-0 left-0 right-0 z-40 transition-colors duration-200 transform-gpu',
         scrolled
-          ? 'bg-canvas/95 backdrop-blur-md border-b border-hairline'
-          : 'bg-canvas'
+          ? 'bg-[#0a0a0a]/98 border-b border-hairline shadow-sm'
+          : 'bg-[#0a0a0a]'
       )}
     >
       <div className="max-w-[1280px] mx-auto px-6 h-14 flex items-center gap-6">
         {/* Logo */}
         <Link
           to="/"
-          className="flex items-center gap-2 shrink-0"
+          className="flex items-center shrink-0 group"
           aria-label="Yumenime home"
         >
-          <div className="w-7 h-7 rounded-full bg-sunset flex items-center justify-center">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="white">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </div>
-          <span className="text-ink font-display text-sm tracking-tight font-medium hidden sm:block">
+          <span className="text-ink font-display text-sm tracking-tight font-medium group-hover:text-sunset transition-colors">
             YUMENIME
           </span>
         </Link>
@@ -138,7 +152,7 @@ export function Navbar() {
               </svg>
               <input
                 type="search"
-                placeholder="Cari anime..."
+                placeholder="Search anime..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
@@ -146,7 +160,7 @@ export function Navbar() {
                 }}
                 onFocus={() => setSearchOpen(true)}
                 className="bg-transparent text-ink text-sm font-display placeholder:text-mute outline-none w-full"
-                aria-label="Cari anime"
+                aria-label="Search anime"
                 id="navbar-search"
               />
             </div>
@@ -178,13 +192,13 @@ export function Navbar() {
                 onClick={() => setSearchOpen(false)}
                 className="block text-center text-xs text-mute py-2 hover:text-body border-t border-hairline transition-colors"
               >
-                Lihat semua hasil →
+                View all results →
               </Link>
             </div>
           )}
         </div>
 
-        {/* Auth area */}
+        {/* Auth area (Desktop) */}
         <div className="hidden md:flex items-center gap-2">
           {isAuthenticated && user ? (
             <>
@@ -201,12 +215,15 @@ export function Navbar() {
                 </Button>
               </Link>
 
+              {/* Notification Bell */}
+              <NotificationBell />
+
               {/* Profile dropdown menu under avatar */}
               <div ref={profileRef} className="relative">
                 <button
                   onClick={() => setProfileOpen((v) => !v)}
                   className="flex items-center gap-2 p-1 rounded-full hover:bg-white/5 border border-hairline transition-colors cursor-pointer"
-                  aria-label="Menu profil"
+                  aria-label="Profile menu"
                 >
                   {user.avatar ? (
                     <img
@@ -243,7 +260,7 @@ export function Navbar() {
                         )}
                       </div>
                       <p className="text-[11px] text-mute font-mono truncate">{user.email}</p>
-                      <span className="text-[10px] text-sunset font-display hover:underline block mt-0.5">Lihat Profil Saya →</span>
+                      <span className="text-[10px] text-sunset font-display hover:underline block mt-0.5">View Profile →</span>
                     </Link>
 
                     <Link
@@ -254,7 +271,7 @@ export function Navbar() {
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
-                      Profil Saya
+                      My Profile
                     </Link>
 
                     <Link
@@ -266,7 +283,7 @@ export function Navbar() {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                        Watchlist Saya
+                        My Watchlist
                       </span>
                       <span className="bg-canvas-mid text-ink font-mono text-[10px] px-1.5 py-0.5 rounded-full">
                         {animeIds.length}
@@ -283,7 +300,7 @@ export function Navbar() {
                           <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
                           <rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>
                         </svg>
-                        Panel Admin
+                        Admin Panel
                         <span className="ml-auto text-[9px] font-mono font-bold bg-red-500/20 text-red-400 border border-red-500/40 px-1.5 py-0.5 rounded-full">ADMIN</span>
                       </Link>
                     )}
@@ -293,12 +310,12 @@ export function Navbar() {
                         logout();
                         setProfileOpen(false);
                       }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 rounded-[6px] transition-colors text-left mt-1 border-t border-hairline"
+                      className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 rounded-[6px] transition-colors text-left mt-1 border-t border-hairline cursor-pointer"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
-                      Keluar
+                      Sign Out
                     </button>
                   </div>
                 )}
@@ -307,37 +324,40 @@ export function Navbar() {
           ) : (
             <>
               <Link to="/login">
-                <Button variant="outline-sm" size="sm">Masuk</Button>
+                <Button variant="outline-sm" size="sm">Sign In</Button>
               </Link>
               <Link to="/register">
-                <Button variant="primary" size="sm">Daftar</Button>
+                <Button variant="primary" size="sm">Sign Up</Button>
               </Link>
             </>
           )}
         </div>
 
-        {/* Mobile hamburger */}
-        <button
-          className="md:hidden text-body p-1.5 rounded-full hover:bg-white/5 transition-colors"
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-label={menuOpen ? 'Tutup menu' : 'Buka menu'}
-          aria-expanded={menuOpen}
-        >
-          {menuOpen ? (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
-            </svg>
-          ) : (
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M3 12h18M3 6h18M3 18h18" strokeLinecap="round" />
-            </svg>
-          )}
-        </button>
+        {/* Mobile controls (Notification Bell at top + Hamburger button) */}
+        <div className="flex md:hidden items-center gap-1.5 ml-auto">
+          <NotificationBell />
+          <button
+            className="text-body p-1.5 rounded-full hover:bg-white/5 transition-colors"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+            aria-expanded={menuOpen}
+          >
+            {menuOpen ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M3 12h18M3 6h18M3 18h18" strokeLinecap="round" />
+              </svg>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Mobile dropdown menu */}
       {menuOpen && (
-        <div className="md:hidden bg-canvas-soft border-t border-hairline animate-fade-in-up">
+        <div className="md:hidden bg-canvas-soft border-t border-hairline animate-fade-in-up max-h-[calc(100vh-56px)] overflow-y-auto">
           <div className="px-6 py-4 space-y-1">
             {/* Mobile search */}
             <form onSubmit={handleSearchSubmit} className="mb-3">
@@ -347,7 +367,7 @@ export function Navbar() {
                 </svg>
                 <input
                   type="search"
-                  placeholder="Cari anime..."
+                  placeholder="Search anime..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="bg-transparent text-ink text-sm placeholder:text-mute outline-none w-full"
@@ -355,6 +375,7 @@ export function Navbar() {
               </div>
             </form>
 
+            {/* Nav links */}
             {navLinks.map((link) => (
               <NavLink
                 key={link.to}
@@ -373,6 +394,91 @@ export function Navbar() {
 
             <hr className="border-hairline my-2" />
 
+            {/* Notifications inside Mobile Menu */}
+            <div>
+              <button
+                onClick={() => setMobileNotifOpen((v) => !v)}
+                className="w-full flex items-center justify-between px-3 py-2 text-sm font-display text-body hover:text-ink hover:bg-white/5 rounded-[8px] transition-colors cursor-pointer"
+              >
+                <span className="flex items-center gap-2.5">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-mute">
+                    <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M13.73 21a2 2 0 01-3.46 0" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Notifications
+                </span>
+                <div className="flex items-center gap-2">
+                  {notifUnreadCount > 0 && (
+                    <span className="bg-sunset text-white font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
+                      {notifUnreadCount} new
+                    </span>
+                  )}
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    className={`text-mute transition-transform duration-200 ${mobileNotifOpen ? 'rotate-180' : ''}`}
+                  >
+                    <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+              </button>
+
+              {mobileNotifOpen && (
+                <div className="mt-1 bg-canvas border border-hairline rounded-[8px] overflow-hidden mb-2 animate-fade-in-up">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-hairline bg-canvas-soft">
+                    <span className="text-[10px] font-mono text-mute uppercase tracking-wider">ANNOUNCEMENTS</span>
+                    <div className="flex gap-2">
+                      {notifUnreadCount > 0 && (
+                        <button onClick={markAllRead} className="text-[10px] text-mute hover:text-ink font-display cursor-pointer">
+                          Mark read
+                        </button>
+                      )}
+                      {notifications.length > 0 && (
+                        <button onClick={clearAll} className="text-[10px] text-red-400 hover:text-red-300 font-display cursor-pointer">
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="max-h-56 overflow-y-auto divide-y divide-hairline">
+                    {notifications.length === 0 ? (
+                      <p className="text-xs text-mute text-center py-4 font-display">No notifications</p>
+                    ) : (
+                      notifications.map((n) => (
+                        <NotifItem key={n.id} notif={n} onRead={markRead} onRemove={removeNotification} />
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Watchlist inside Mobile Menu */}
+            <Link
+              to="/watchlist"
+              onClick={() => setMenuOpen(false)}
+              className="flex items-center justify-between px-3 py-2 text-sm font-display text-body hover:text-ink hover:bg-white/5 rounded-[8px] transition-colors"
+            >
+              <span className="flex items-center gap-2.5">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-mute">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                My Watchlist
+              </span>
+              {animeIds.length > 0 && (
+                <span className="bg-sunset text-white font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
+                  {animeIds.length}
+                </span>
+              )}
+            </Link>
+
+            <hr className="border-hairline my-2" />
+
+            {/* User section */}
             {isAuthenticated && user ? (
               <div className="space-y-1">
                 <Link
@@ -395,7 +501,7 @@ export function Navbar() {
                   )}
                   <div>
                     <p className="text-xs text-ink font-medium">{user.username}</p>
-                    <p className="text-[10px] text-sunset">Lihat Profil Akun →</p>
+                    <p className="text-[10px] text-sunset">View Profile →</p>
                   </div>
                 </Link>
                 {isAdmin && (
@@ -404,24 +510,27 @@ export function Navbar() {
                     onClick={() => setMenuOpen(false)}
                     className="flex items-center justify-between px-3 py-2 text-xs text-red-400 hover:bg-red-500/10 rounded-[8px] transition-colors"
                   >
-                    <span>Panel Admin</span>
+                    <span>Admin Panel</span>
                     <span className="text-[9px] font-mono font-bold bg-red-500/20 text-red-400 border border-red-500/40 px-1.5 py-0.5 rounded-full">ADMIN</span>
                   </Link>
                 )}
                 <button
                   onClick={() => { logout(); setMenuOpen(false); }}
-                  className="w-full text-left text-xs text-red-400 px-3 py-2 hover:bg-red-500/10 rounded-[8px] transition-colors"
+                  className="w-full flex items-center gap-2 text-left text-xs text-red-400 px-3 py-2 hover:bg-red-500/10 rounded-[8px] transition-colors cursor-pointer"
                 >
-                  Keluar
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Sign Out
                 </button>
               </div>
             ) : (
               <div className="flex gap-2 px-3 py-2">
                 <Link to="/login" onClick={() => setMenuOpen(false)} className="flex-1">
-                  <Button variant="outline" size="md" fullWidth>Masuk</Button>
+                  <Button variant="outline" size="md" fullWidth>Sign In</Button>
                 </Link>
                 <Link to="/register" onClick={() => setMenuOpen(false)} className="flex-1">
-                  <Button variant="primary" size="md" fullWidth>Daftar</Button>
+                  <Button variant="primary" size="md" fullWidth>Sign Up</Button>
                 </Link>
               </div>
             )}

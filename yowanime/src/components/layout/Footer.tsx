@@ -10,19 +10,19 @@ export function Footer() {
   const currentYear = new Date().getFullYear();
 
   const navigation = [
-    { label: 'Beranda', to: '/' },
-    { label: 'Daftar Anime', to: '/anime' },
-    { label: 'Genre', to: '/genre' },
-    { label: 'Jadwal', to: '/schedule' },
+    { label: 'Home', to: '/' },
+    { label: 'Anime List', to: '/anime' },
+    { label: 'Genres', to: '/genre' },
+    { label: 'Schedule', to: '/schedule' },
     { label: 'Watchlist', to: '/watchlist' },
   ];
 
   const legal = [
-    { label: 'Tentang Kami', to: '#' },
-    { label: 'Kebijakan Privasi', to: '#' },
-    { label: 'Syarat & Ketentuan', to: '#' },
+    { label: 'About Us', to: '#' },
+    { label: 'Privacy Policy', to: '#' },
+    { label: 'Terms & Conditions', to: '#' },
     { label: 'DMCA', to: '#' },
-    { label: 'Kontak', to: '#' },
+    { label: 'Contact', to: '#' },
   ];
 
   return (
@@ -31,22 +31,19 @@ export function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
-            <Link to="/" className="flex items-center gap-2 mb-4">
-              <div className="w-7 h-7 rounded-full bg-sunset flex items-center justify-center shrink-0">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-              </div>
-              <span className="text-ink font-display text-sm font-medium tracking-tight">YUMENIME</span>
+            <Link to="/" className="flex items-center mb-4 group inline-flex">
+              <span className="text-ink font-display text-sm font-medium tracking-tight group-hover:text-sunset transition-colors">
+                YUMENIME
+              </span>
             </Link>
             <p className="text-body-mid text-xs font-display leading-relaxed max-w-[200px]">
-              Platform streaming anime subtitle Indonesia terlengkap dan terupdate.
+              The premier platform for streaming anime online in HD quality.
             </p>
           </div>
 
           {/* Navigation */}
           <div>
-            <p className="eyebrow-mono text-mute mb-3">Navigasi</p>
+            <p className="eyebrow-mono text-mute mb-3">Navigation</p>
             <ul className="space-y-2">
               {navigation.map((item) => (
                 <li key={item.to}>
@@ -63,7 +60,7 @@ export function Footer() {
 
           {/* Genre */}
           <div>
-            <p className="eyebrow-mono text-mute mb-3">Genre</p>
+            <p className="eyebrow-mono text-mute mb-3">Genres</p>
             <ul className="space-y-2">
               {genres.map((genre) => (
                 <li key={genre}>
@@ -102,7 +99,7 @@ export function Footer() {
             © {currentYear} YUMENIME. ALL RIGHTS RESERVED.
           </p>
           <p className="text-mute text-xs font-display">
-            Dibuat untuk pecinta anime Indonesia
+            Built for anime fans worldwide
           </p>
         </div>
       </div>

@@ -16,84 +16,84 @@ export const PRESET_CHARACTERS: Omit<FavoriteCharacter, 'id'>[] = [
     animeName: 'Jujutsu Kaisen',
     role: 'Main Character',
     image: 'https://s4.anilist.co/file/anilistcdn/character/large/b126446-TwtlBtf95t62.png',
-    description: 'Penyihir Jujutsu terkuat dengan teknik Limitless dan Six Eyes.',
+    description: 'The strongest Jujutsu sorcerer possessing the Limitless and Six Eyes.',
   },
   {
     name: 'Eren Yeager',
     animeName: 'Attack on Titan',
     role: 'Main Character',
     image: 'https://s4.anilist.co/file/anilistcdn/character/large/b40882-dsj7IP943WFF.jpg',
-    description: 'Pemegang kekuatan Attack Titan yang terus maju demi kebebasan.',
+    description: 'The Attack Titan inheritor relentlessly advancing toward freedom.',
   },
   {
     name: 'Monkey D. Luffy',
     animeName: 'One Piece',
     role: 'Main Character',
     image: 'https://s4.anilist.co/file/anilistcdn/character/large/b40-T4sF1a94Xm36.png',
-    description: 'Kapten Bajak Laut Topi Jerami bertekad menjadi Raja Bajak Laut.',
+    description: 'Captain of the Straw Hat Pirates determined to become the Pirate King.',
   },
   {
     name: 'Levi Ackerman',
     animeName: 'Attack on Titan',
     role: 'Supporting',
     image: 'https://s4.anilist.co/file/anilistcdn/character/large/b45627-CR68RyZmddGG.png',
-    description: 'Prajurit terkuat umat manusia dari Survey Corps.',
+    description: "Humanity's strongest soldier from the Survey Corps.",
   },
   {
     name: 'Tanjiro Kamado',
     animeName: 'Demon Slayer',
     role: 'Main Character',
     image: 'https://s4.anilist.co/file/anilistcdn/character/large/b126071-w4tH0aLspY5d.png',
-    description: 'Pemburu iblis berhati mulia yang menguasai Pernapasan Air & Sun Breathing.',
+    description: 'Kind-hearted demon slayer mastering Water & Sun Breathing styles.',
   },
   {
     name: 'Anya Forger',
     animeName: 'Spy x Family',
     role: 'Main Character',
     image: 'https://s4.anilist.co/file/anilistcdn/character/large/b143761-l5zLlsrDkS9p.png',
-    description: 'Anak telepatis yang menyukai kacang tanah dan menyatukan keluarga Forger.',
+    description: 'Telepathic peanut-loving daughter bringing the Forger family together.',
   },
   {
     name: 'Roronoa Zoro',
     animeName: 'One Piece',
     role: 'Main Character',
     image: 'https://s4.anilist.co/file/anilistcdn/character/large/b62-p70gsp4s2K0K.png',
-    description: 'Pendekar tiga pedang yang bertekad menjadi pendekar pedang nomor 1 di dunia.',
+    description: "Three-sword style swordsman striving to become world's greatest.",
   },
   {
     name: 'Mikasa Ackerman',
     animeName: 'Attack on Titan',
     role: 'Main Character',
     image: 'https://s4.anilist.co/file/anilistcdn/character/large/b40881-F3gr1PkreDvj.png',
-    description: 'Prajurit jenius yang rela mempertaruhkan segalanya demi melindungi Eren.',
+    description: 'Elite soldier ready to risk everything to protect Eren.',
   },
   {
     name: 'Megumi Fushiguro',
     animeName: 'Jujutsu Kaisen',
     role: 'Main Character',
     image: 'https://s4.anilist.co/file/anilistcdn/character/large/b127457-3pW9vW7H1oWw.png',
-    description: 'Pengguna Teknik Ten Shadows yang memiliki potensi luar biasa.',
+    description: 'Ten Shadows technique user with immense potential.',
   },
   {
     name: 'Rem',
     animeName: 'Re:Zero',
     role: 'Supporting',
     image: 'https://s4.anilist.co/file/anilistcdn/character/large/b88572-cuh8nQf92P1w.png',
-    description: 'Pelayan iblis setia berambut biru yang penuh kasih sayang.',
+    description: 'Devoted blue-haired demon maid full of affection.',
   },
   {
     name: 'Killua Zoldyck',
     animeName: 'Hunter x Hunter',
     role: 'Main Character',
     image: 'https://s4.anilist.co/file/anilistcdn/character/large/b27-k7P5W3Y4X45x.png',
-    description: 'Pembunuh bayaran berbakat dari keluarga Zoldyck berkekuatan petir.',
+    description: 'Prodigious assassin from the Zoldyck family wielding lightning.',
   },
   {
     name: 'Saitama',
     animeName: 'One Punch Man',
     role: 'Main Character',
     image: 'https://s4.anilist.co/file/anilistcdn/character/large/b83797-h7bN1Yx6S61w.png',
-    description: 'Pahlawan karena hobi yang bisa mengalahkan musuh hanya dengan satu pukulan.',
+    description: 'A hero for fun who can defeat any opponent with a single punch.',
   },
 ];
 
@@ -115,7 +115,7 @@ export function AddCharacterModal({ isOpen, onClose, onAddCharacter, currentCoun
 
   const handleSelectPreset = (preset: Omit<FavoriteCharacter, 'id'>) => {
     if (isLimitReached) {
-      alert('Batas maksimum 15 karakter favorit telah tercapai!');
+      alert('Maximum limit of 15 favorite characters reached!');
       return;
     }
     onAddCharacter(preset);
@@ -126,7 +126,7 @@ export function AddCharacterModal({ isOpen, onClose, onAddCharacter, currentCoun
     const file = e.target.files?.[0];
     if (file) {
       if (!file.type.startsWith('image/')) {
-        alert('Pilih file berupa gambar (JPG, PNG, WEBP)');
+        alert('Please select an image file (JPG, PNG, WEBP)');
         return;
       }
       const reader = new FileReader();
@@ -142,7 +142,7 @@ export function AddCharacterModal({ isOpen, onClose, onAddCharacter, currentCoun
   const handleSubmitCustom = (e: FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !animeName.trim()) {
-      alert('Nama Karakter dan Judul Anime wajib diisi!');
+      alert('Character Name and Anime Title are required!');
       return;
     }
     const finalImage = image.trim()
@@ -168,25 +168,25 @@ export function AddCharacterModal({ isOpen, onClose, onAddCharacter, currentCoun
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 animate-fade-in">
       <div className="bg-canvas-card border border-hairline rounded-[12px] w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
         {/* Header */}
         <div className="px-6 py-4 border-b border-hairline flex items-center justify-between bg-canvas-soft">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="display-sm text-ink text-lg font-bold">Tambah Karakter Favorit</h2>
+              <h2 className="display-sm text-ink text-lg font-bold">Add Favorite Character</h2>
               <span className={`text-xs font-mono px-2 py-0.5 rounded-full border ${isLimitReached ? 'bg-red-500/10 text-red-400 border-red-500/30' : 'bg-sunset/10 text-sunset border-sunset/20'}`}>
                 {currentCount}/15
               </span>
             </div>
             <p className="text-xs text-mute font-display">
-              Pilih dari daftar karakter populer atau tambahkan karakter kustom milikmu (Maksimal 15 karakter).
+              Choose from popular characters or add your own custom character (Maximum 15 characters).
             </p>
           </div>
           <button
             onClick={onClose}
             className="text-mute hover:text-ink p-1 rounded-md transition-colors"
-            title="Tutup"
+            title="Close"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="18" y1="6" x2="6" y2="18" />
@@ -204,7 +204,7 @@ export function AddCharacterModal({ isOpen, onClose, onAddCharacter, currentCoun
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
-              Batas maksimum 15 karakter favorit telah tercapai. Hapus beberapa karakter untuk menambahkan baru.
+              Maximum limit of 15 favorite characters reached. Remove some characters to add new ones.
             </p>
           </div>
         )}
@@ -219,7 +219,7 @@ export function AddCharacterModal({ isOpen, onClose, onAddCharacter, currentCoun
                 : 'border-transparent text-mute hover:text-body'
             }`}
           >
-            Karakter Populer
+            Popular Characters
           </button>
           <button
             onClick={() => setTab('custom')}
@@ -229,7 +229,7 @@ export function AddCharacterModal({ isOpen, onClose, onAddCharacter, currentCoun
                 : 'border-transparent text-mute hover:text-body'
             }`}
           >
-            Karakter Kustom
+            Custom Character
           </button>
         </div>
 
@@ -255,7 +255,7 @@ export function AddCharacterModal({ isOpen, onClose, onAddCharacter, currentCoun
                     {preset.animeName}
                   </p>
                   <span className="mt-2 text-[10px] bg-sunset/10 text-sunset px-2 py-0.5 rounded-full border border-sunset/20 font-mono">
-                    + Tambahkan
+                    + Add
                   </span>
                 </div>
               ))}
@@ -263,25 +263,25 @@ export function AddCharacterModal({ isOpen, onClose, onAddCharacter, currentCoun
           ) : (
             <form onSubmit={handleSubmitCustom} className="space-y-4">
               <Input
-                label="Nama Karakter *"
+                label="Character Name *"
                 type="text"
-                placeholder="Contoh: Gojo Satoru"
+                placeholder="e.g., Gojo Satoru"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
               />
 
               <Input
-                label="Judul Anime *"
+                label="Anime Title *"
                 type="text"
-                placeholder="Contoh: Jujutsu Kaisen"
+                placeholder="e.g., Jujutsu Kaisen"
                 value={animeName}
                 onChange={(e) => setAnimeName(e.target.value)}
                 required
               />
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-display text-mute uppercase tracking-wider">Peran (Role)</label>
+                <label className="text-xs font-display text-mute uppercase tracking-wider">Role</label>
                 <select
                   value={role}
                   onChange={(e) => setRole(e.target.value)}
@@ -296,10 +296,10 @@ export function AddCharacterModal({ isOpen, onClose, onAddCharacter, currentCoun
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-display text-mute uppercase tracking-wider">Deskripsi / Quote Favorit</label>
+                <label className="text-xs font-display text-mute uppercase tracking-wider">Description / Favorite Quote</label>
                 <textarea
                   rows={3}
-                  placeholder="Tulis alasan menyukai karakter ini atau kutipan favorit..."
+                  placeholder="Write why you love this character or your favorite quote..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full bg-canvas-soft border border-hairline rounded-[6px] p-3 text-sm text-ink focus:outline-none focus:border-sunset resize-none"
@@ -307,7 +307,7 @@ export function AddCharacterModal({ isOpen, onClose, onAddCharacter, currentCoun
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-display text-mute uppercase tracking-wider">Foto Karakter</label>
+                <label className="text-xs font-display text-mute uppercase tracking-wider">Character Image</label>
                 <div className="flex items-center gap-4">
                   <img
                     src={image || `https://picsum.photos/seed/${encodeURIComponent(name || 'preview')}/80/80`}
@@ -336,12 +336,12 @@ export function AddCharacterModal({ isOpen, onClose, onAddCharacter, currentCoun
                           </svg>
                         }
                       >
-                        Pilih dari Galeri
+                        Choose from Gallery
                       </Button>
                     </div>
                     <Input
                       type="url"
-                      placeholder="Atau masukkan URL Gambar..."
+                      placeholder="Or enter image URL..."
                       value={image}
                       onChange={(e) => setImage(e.target.value)}
                     />
@@ -351,10 +351,10 @@ export function AddCharacterModal({ isOpen, onClose, onAddCharacter, currentCoun
 
               <div className="pt-3 flex justify-end gap-3 border-t border-hairline">
                 <Button type="button" variant="outline" size="md" onClick={onClose}>
-                  Batal
+                  Cancel
                 </Button>
                 <Button type="submit" variant="primary" size="md">
-                  Simpan Karakter
+                  Save Character
                 </Button>
               </div>
             </form>
