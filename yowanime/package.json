@@ -10,7 +10,12 @@
     "preview": "vite preview",
     "cap:sync": "npm run build && cap sync",
     "cap:copy": "npm run build && cap copy",
-    "cap:open:android": "cap open android"
+    "cap:open:android": "cap open android",
+    "server": "node server/index.js",
+    "scrape": "node server/scrapeAll.js",
+    "scrape:once": "node server/autoScraper.js once",
+    "scrape:daemon": "node server/autoScraper.js daemon",
+    "scrape:nekopoi": "node server/scrapeNekopoi.js"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",

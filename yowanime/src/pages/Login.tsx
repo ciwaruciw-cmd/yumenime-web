@@ -16,15 +16,18 @@ export default function Login() {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    await login({ email, password });
-    // If login succeeds, store will update isAuthenticated
-    if (useAuthStore.getState().isAuthenticated) {
-      navigate('/');
+    try {
+      await login({ email, password });
+      if (useAuthStore.getState().isAuthenticated) {
+        navigate('/');
+      }
+    } catch {
+      // Handled by store error state
     }
   };
 
   return (
-    <div className="page-enter pt-20 min-h-screen flex items-center justify-center px-6">
+    <div className="page-enter pt-14 sm:pt-20 min-h-screen flex items-center justify-center px-6">
       <div className="w-full max-w-sm">
         {/* Card */}
         <div className="bg-canvas-soft border border-hairline rounded-[8px] p-6 md:p-8">

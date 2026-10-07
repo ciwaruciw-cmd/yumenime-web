@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { clsx } from 'clsx';
-import { getAllGenres } from '@/data/mockAnime';
+import { getAllGenres } from '@/data/genres';
 import type { AnimeGenre } from '@/types/anime';
 
 interface GenreFilterProps {

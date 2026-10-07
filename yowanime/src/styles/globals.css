@@ -51,6 +51,60 @@
   --spacing: 0.25rem;
 }
 
+/* ── Theme Overrides (Dark / Light / AMOLED) ── */
+:root, [data-theme="dark"] {
+  --color-canvas:         #0a0a0a;
+  --color-canvas-soft:    #14161a;
+  --color-canvas-card:    #191919;
+  --color-canvas-mid:     #2a2d33;
+  --color-hairline:       rgba(255, 255, 255, 0.08);
+  --color-ink:            #ffffff;
+  --color-ink-hover:      #fafaf7;
+  --color-body:           #dadbdf;
+  --color-body-mid:       #9ca3af;
+  --color-mute:           #7d8187;
+}
+
+[data-theme="light"] {
+  --color-canvas:         #f8fafc;
+  --color-canvas-soft:    #f1f5f9;
+  --color-canvas-card:    #ffffff;
+  --color-canvas-mid:     #e2e8f0;
+  --color-hairline:       rgba(0, 0, 0, 0.09);
+  --color-ink:            #0f172a;
+  --color-ink-hover:      #1e293b;
+  --color-body:           #334155;
+  --color-body-mid:       #64748b;
+  --color-mute:           #94a3b8;
+}
+
+[data-theme="light"] header {
+  background-color: rgba(248, 250, 252, 0.95) !important;
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="light"] nav a.text-ink.bg-white\/10 {
+  background-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+[data-theme="light"] .bg-canvas-card,
+[data-theme="light"] .bg-canvas-soft {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="amoled"] {
+  --color-canvas:         #000000;
+  --color-canvas-soft:    #080808;
+  --color-canvas-card:    #0d0d0d;
+  --color-canvas-mid:     #1a1a1a;
+  --color-hairline:       rgba(255, 255, 255, 0.06);
+  --color-ink:            #ffffff;
+  --color-ink-hover:      #f5f5f5;
+  --color-body:           #e2e8f0;
+  --color-body-mid:       #888888;
+  --color-mute:           #666666;
+}
+
 /* ── Base Reset & Mobile Performance Defaults ── */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -58,10 +112,23 @@
 }
 
 html {
-  scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  text-rendering: optimizeLegibility;
+  text-rendering: optimizeSpeed;
+}
+
+/* Enable smooth scrolling only for desktop pointer devices to avoid touch lag on mobile */
+@media (prefers-reduced-motion: no-preference) and (pointer: fine) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* ── Mobile Viewport Scaling (Clean, Compact, Native-App Feel on Mobile) ── */
+@media (max-width: 640px) {
+  html {
+    font-size: 14px;
+  }
 }
 
 body {
@@ -69,10 +136,11 @@ body {
   background-color: var(--color-canvas);
   color: var(--color-ink);
   font-family: var(--font-display);
-  font-size: var(--font-size-body-md);
+  font-size: 1rem;
   line-height: 1.5;
   min-height: 100vh;
   overflow-x: hidden;
+  overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -95,47 +163,47 @@ body {
 /* ── Typography Utility Classes (design tokens) ── */
 .display-xl {
   font-family: var(--font-display);
-  font-size: clamp(2.25rem, 5vw, 56px);
-  font-weight: 400;
-  line-height: 1.1;
+  font-size: clamp(1.75rem, 5vw, 52px);
+  font-weight: 500;
+  line-height: 1.15;
   letter-spacing: -0.025em;
 }
 
 .display-lg {
   font-family: var(--font-display);
-  font-size: clamp(1.875rem, 4vw, 44px);
-  font-weight: 400;
+  font-size: clamp(1.4rem, 4vw, 40px);
+  font-weight: 500;
   line-height: 1.15;
   letter-spacing: -0.025em;
 }
 
 .display-md {
   font-family: var(--font-display);
-  font-size: clamp(1.5rem, 3vw, 36px);
-  font-weight: 400;
+  font-size: clamp(1.2rem, 3vw, 32px);
+  font-weight: 500;
   line-height: 1.2;
   letter-spacing: -0.025em;
 }
 
 .display-sm {
   font-family: var(--font-display);
-  font-size: clamp(1.25rem, 2.5vw, 28px);
-  font-weight: 400;
+  font-size: clamp(1.05rem, 2.5vw, 26px);
+  font-weight: 500;
   line-height: 1.25;
   letter-spacing: -0.019em;
 }
 
 .display-xs {
   font-family: var(--font-display);
-  font-size: 20px;
-  font-weight: 400;
+  font-size: 1.1rem;
+  font-weight: 500;
   line-height: 1.4;
 }
 
 .eyebrow-mono {
   font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 400;
+  font-size: 11px;
+  font-weight: 500;
   line-height: 1.333;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -144,10 +212,14 @@ body {
 
 .caption-mono {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 400;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+}
+
+.safe-area-bottom {
+  padding-bottom: max(0.25rem, env(safe-area-inset-bottom, 0px));
 }
 
 /* ── Anime card hover gradient overlay ── */
@@ -220,11 +292,13 @@ body {
 /* ── Horizontal scroll section ── */
 .scroll-x {
   overflow-x: auto;
-  scrollbar-width: thin;
+  scrollbar-width: none;
   -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
 }
 .scroll-x::-webkit-scrollbar {
-  height: 3px;
+  display: none;
 }
 
 /* ── Hairline divider ── */
@@ -273,7 +347,6 @@ body {
 .gpu-accelerated {
   transform: translateZ(0);
   backface-visibility: hidden;
-  will-change: transform, opacity;
 }
 
 .touch-pan-y {
@@ -284,6 +357,17 @@ body {
   touch-action: pan-x;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
+}
+
+/* Eliminate hover repaints and GPU layer scaling on touch mobile devices */
+@media (hover: none) and (pointer: coarse) {
+  .hover\:-translate-y-0\.5:hover,
+  .hover\:-translate-y-1:hover,
+  .group:hover .group-hover\:scale-105,
+  .group:hover .group-hover\:scale-110,
+  .hover\:scale-105:hover {
+    transform: none !important;
+  }
 }
 
 

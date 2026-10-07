@@ -21,7 +21,7 @@ export function HeroBanner({ anime }: HeroBannerProps) {
 
   return (
     <section
-      className="relative w-full min-h-[440px] sm:min-h-[520px] md:min-h-[640px] flex items-end pt-16 md:pt-24 pb-8 md:pb-12 transform-gpu"
+      className="relative w-full min-h-[400px] sm:min-h-[480px] md:min-h-[640px] flex items-end pt-12 sm:pt-14 md:pt-24 pb-6 sm:pb-8 md:pb-12 transform-gpu"
       aria-label="Featured anime"
     >
       {/* Background image */}
@@ -90,7 +90,7 @@ export function HeroBanner({ anime }: HeroBannerProps) {
 
           {/* CTA buttons — pill shape */}
           <div className="flex gap-3 pt-2 flex-wrap">
-            <Link to={`/anime/${anime.slug}/episode/1`}>
+            <Link to={`/anime/${anime.slug || anime.id}/episode/1`}>
               <Button variant="primary" size="lg" icon={
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                   <polygon points="5 3 19 12 5 21 5 3" />
@@ -117,7 +117,7 @@ export function HeroBanner({ anime }: HeroBannerProps) {
             >
               {inWatchlist ? 'Saved' : 'Watchlist'}
             </Button>
-            <Link to={`/anime/${anime.slug}`}>
+            <Link to={`/anime/${anime.slug || anime.id}`}>
               <Button variant="outline" size="lg" icon={
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" strokeLinecap="round" />

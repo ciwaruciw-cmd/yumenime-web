@@ -11,24 +11,27 @@ interface UseAnimeDetailReturn {
 }
 
 const DETAIL_CACHE_TTL = 5 * 60 * 1000; // 5 menit
-const DUMMY_DOMAINS = ['commondatastorage', 'vjs.zencdn', 'w3schools', 'mozilla.net'];
+const DUMMY_DOMAINS = ['commondatastorage', 'vjs.zencdn', 'w3schools', 'mozilla.net', 'oceans.mp4', 'sintel', 'mov_bbb'];
 
 function getDetailCache(key: string): { anime: Anime; episodes: Episode[] } | null {
   try {
-    const raw = sessionStorage.getItem(`detail:v3:${key}`);
+    const raw = sessionStorage.getItem(`detail:v10:${key}`);
     if (!raw) return null;
     const { data, ts } = JSON.parse(raw) as { data: { anime: Anime; episodes: Episode[] }; ts: number };
-    if (Date.now() - ts > DETAIL_CACHE_TTL || !data || !data.episodes || data.episodes.length === 0) {
-      sessionStorage.removeItem(`detail:v3:${key}`);
+    if (Date.now() - ts > DETAIL_CACHE_TTL || !data || !data.anime) {
+      sessionStorage.removeItem(`detail:v10:${key}`);
       return null;
     }
-    // If cache only contains dummy videos, bust it to check for real stream
-    const hasOnlyDummy = data.episodes.every((ep) =>
-      ep.sources.every((s) => DUMMY_DOMAINS.some((d) => s.url.includes(d)))
-    );
-    if (hasOnlyDummy) {
-      sessionStorage.removeItem(`detail:v3:${key}`);
-      return null;
+    // If episodes exist and have sources, check that they are not purely dummy streams
+    if (Array.isArray(data.episodes) && data.episodes.length > 0) {
+      const hasAnySources = data.episodes.some((ep) => ep.sources && ep.sources.length > 0);
+      const hasRealStream = data.episodes.some((ep) =>
+        ep.sources?.some((s) => s.url && !DUMMY_DOMAINS.some((d) => s.url.includes(d)))
+      );
+      if (hasAnySources && !hasRealStream) {
+        sessionStorage.removeItem(`detail:v10:${key}`);
+        return null;
+      }
     }
     return data;
   } catch {
@@ -38,7 +41,16 @@ function getDetailCache(key: string): { anime: Anime; episodes: Episode[] } | nu
 
 function setDetailCache(key: string, data: { anime: Anime; episodes: Episode[] }) {
   try {
-    sessionStorage.setItem(`detail:v3:${key}`, JSON.stringify({ data, ts: Date.now() }));
+    if (!data || !data.anime) return;
+    // Don't cache if episodes contain only dummy streams
+    if (Array.isArray(data.episodes) && data.episodes.length > 0) {
+      const hasAnySources = data.episodes.some((ep) => ep.sources && ep.sources.length > 0);
+      const hasRealStream = data.episodes.some((ep) =>
+        ep.sources?.some((s) => s.url && !DUMMY_DOMAINS.some((d) => s.url.includes(d)))
+      );
+      if (hasAnySources && !hasRealStream) return;
+    }
+    sessionStorage.setItem(`detail:v10:${key}`, JSON.stringify({ data, ts: Date.now() }));
   } catch { /* private mode / full */ }
 }
 

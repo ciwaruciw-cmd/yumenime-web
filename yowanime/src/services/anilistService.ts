@@ -51,11 +51,22 @@ export interface AniListMedia {
       }>;
     }>;
   };
+  streamingEpisodes?: Array<{
+    title: string;
+    thumbnail?: string;
+    url?: string;
+    site?: string;
+  }>;
+  nextAiringEpisode?: {
+    episode: number;
+    airingAt: number;
+  } | null;
 }
 
-// ── Persistent Session Cache (5 menit TTL) ─────────────────────────────────
+// ── Fast In-Memory & Session Cache (15 menit TTL) ─────────────────────────
 
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 menit
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 menit
+const memoryCache = new Map<string, { data: any; ts: number }>();
 
 interface CacheEntry<T> {
   data: T;
@@ -63,6 +74,16 @@ interface CacheEntry<T> {
 }
 
 function cacheGet<T>(key: string): T | null {
+  // 1. Fast in-memory check (0ms, no JSON.parse)
+  const mem = memoryCache.get(key);
+  if (mem) {
+    if (Date.now() - mem.ts <= CACHE_TTL_MS) {
+      return mem.data as T;
+    }
+    memoryCache.delete(key);
+  }
+
+  // 2. Persistent session storage check
   try {
     const raw = sessionStorage.getItem(key);
     if (!raw) return null;
@@ -71,6 +92,7 @@ function cacheGet<T>(key: string): T | null {
       sessionStorage.removeItem(key);
       return null;
     }
+    memoryCache.set(key, entry);
     return entry.data;
   } catch {
     return null;
@@ -78,11 +100,12 @@ function cacheGet<T>(key: string): T | null {
 }
 
 function cacheSet<T>(key: string, data: T): void {
+  const entry: CacheEntry<T> = { data, ts: Date.now() };
+  memoryCache.set(key, entry);
   try {
-    const entry: CacheEntry<T> = { data, ts: Date.now() };
     sessionStorage.setItem(key, JSON.stringify(entry));
   } catch {
-    // sessionStorage mungkin penuh (private mode) → abaikan
+    // sessionStorage full or unavailable in private mode
   }
 }
 
@@ -179,8 +202,9 @@ export function mapAniListToAnime(m: AniListMedia): Anime {
     titleJapanese: m.title.native || undefined,
     synopsis,
     synopsisShort: synopsis.slice(0, 200),
-    poster: m.coverImage.extraLarge || m.coverImage.large || m.coverImage.medium,
-    banner: m.bannerImage || m.coverImage.extraLarge || undefined,
+    poster: m.coverImage.large || m.coverImage.medium || m.coverImage.extraLarge,
+    posterHD: m.coverImage.extraLarge || m.coverImage.large || m.coverImage.medium,
+    banner: m.bannerImage || m.coverImage.extraLarge || m.coverImage.large || undefined,
     trailer: trailerUrl,
     genres: mappedGenres,
     status: mapAniListStatus(m.status),
@@ -190,9 +214,29 @@ export function mapAniListToAnime(m: AniListMedia): Anime {
     studio: m.studios?.nodes?.[0]?.name || 'Animation Studio',
     rating: isAdultContent ? '18+' : 'PG-13',
     score: m.averageScore ? Math.round((m.averageScore / 10) * 10) / 10 : 8.0,
-    episodes: m.episodes || 12,
+    episodes: (() => {
+      if (m.status === 'NOT_YET_RELEASED') return 0;
+      if (m.status === 'RELEASING') {
+        if (m.nextAiringEpisode?.episode) {
+          return Math.max(1, m.nextAiringEpisode.episode - 1);
+        }
+        if (m.streamingEpisodes && m.streamingEpisodes.length > 0) {
+          return m.streamingEpisodes.length;
+        }
+        if (m.episodes && m.episodes > 0) {
+          return m.episodes;
+        }
+        return 1; // Default: hanya 1 episode perdana yang baru tayang
+      }
+      return m.episodes || 12;
+    })(),
+    nextAiringEpisode: m.nextAiringEpisode ? {
+      episode: m.nextAiringEpisode.episode,
+      airingAt: m.nextAiringEpisode.airingAt,
+    } : undefined,
     duration: m.duration || 24,
     characters,
+    streamingEpisodes: m.streamingEpisodes,
     isTrending: true,
     isNewUpdate: m.status === 'RELEASING',
     createdAt: now,
@@ -221,6 +265,7 @@ const LIST_QUERY = `
         episodes
         duration
         status
+        nextAiringEpisode { episode airingAt }
         season
         seasonYear
         format
@@ -246,6 +291,7 @@ const DETAIL_QUERY = `
       episodes
       duration
       status
+      nextAiringEpisode { episode airingAt }
       season
       seasonYear
       format
@@ -259,6 +305,12 @@ const DETAIL_QUERY = `
           node { id name { full native } image { large } }
           voiceActors(language: JAPANESE) { id name { full native } image { large } }
         }
+      }
+      streamingEpisodes {
+        title
+        thumbnail
+        url
+        site
       }
     }
   }
@@ -286,11 +338,14 @@ export async function fetchAniListList(params: AnimeFilterParams = {}): Promise<
   if (params.sort === 'latest') sortVar = ['UPDATED_AT_DESC'];
   if (params.sort === 'new') sortVar = ['START_DATE_DESC'];
 
+  // Genre-nya Hentai atau Yuri → perlu isAdult: true supaya AniList mengembalikan konten ini
+  const isAdultGenre = ['hentai', 'yuri'].includes(params.genre?.toLowerCase() ?? '');
+
   const variables: Record<string, any> = {
     page,
     perPage,
     sort: sortVar,
-    isAdult: false,
+    isAdult: isAdultGenre ? true : false,
   };
 
   // Exclude Donghua everywhere unless the user explicitly searches
@@ -356,11 +411,12 @@ export async function fetchAniListList(params: AnimeFilterParams = {}): Promise<
 
   let data = mediaList.map(mapAniListToAnime);
 
-  // Exclude Donghua and hentai unless explicitly requested
+  // Exclude Donghua and hentai/adult unless explicitly requested
   if (!params.search?.trim()) {
     data = data.filter((a) => !isDonghua(a));
   }
-  if (params.genre?.toLowerCase() !== 'hentai') {
+  // Jika genre bukan Hentai dan bukan Yuri, buang konten 18+
+  if (!isAdultGenre) {
     data = data.filter((a) => !a.genres.includes('Hentai') && a.rating !== '18+');
   }
 
@@ -413,34 +469,54 @@ export async function fetchAniListById(idOrSlug: string): Promise<Anime | null> 
 }
 
 export function fetchAniListEpisodes(anime: Anime): Episode[] {
-  const totalEp = anime.episodes > 0 ? anime.episodes : 12;
-  const count = Math.min(Math.max(totalEp, 1), 24); // Guarantee at least 1 episode, max 24
+  let count = 1;
+  if (anime.status === 'upcoming') {
+    return [];
+  } else if (anime.status === 'ongoing') {
+    if (anime.nextAiringEpisode?.episode) {
+      count = Math.max(1, anime.nextAiringEpisode.episode - 1);
+    } else if (anime.streamingEpisodes && anime.streamingEpisodes.length > 0) {
+      count = anime.streamingEpisodes.length;
+    } else if (anime.episodes > 0) {
+      count = anime.episodes;
+    } else {
+      count = 1; // Anime ongoing hanya tayang episode yang sudah rilis
+    }
+  } else {
+    count = anime.episodes > 0 ? anime.episodes : 12;
+  }
+  count = Math.min(Math.max(count, 1), 2000);
 
   const durationSec = (anime.duration && anime.duration > 0) ? anime.duration * 60 : 24 * 60;
-  const anilistId = anime.id;
-  const malId = anime.malId || anime.id;
 
   return Array.from({ length: count }, (_, i) => {
     const epNum = i + 1;
+    // Match episode from streamingEpisodes by number or index
+    const streamingEp = anime.streamingEpisodes?.find((se) => {
+      const match = se.title.match(/Episode\s+(\d+)/i);
+      if (match && parseInt(match[1], 10) === epNum) return true;
+      return false;
+    }) || anime.streamingEpisodes?.[i];
+
     return {
       id: `${anime.id}-ep-${epNum}`,
       animeId: anime.id,
       number: epNum,
-      title: `Episode ${epNum}: ${anime.title}`,
-      thumbnail: anime.banner || anime.poster,
+      title: streamingEp?.title || `Episode ${epNum}: ${anime.title}`,
+      thumbnail: streamingEp?.thumbnail || anime.banner || anime.poster,
       duration: durationSec,
       sources: [
         {
           quality: '1080p',
-          url: `https://vidlink.pro/anime/${anilistId}/${epNum}`,
+          url: 'https://vjs.zencdn.net/v/oceans.mp4',
         },
         {
           quality: '720p',
-          url: `https://www.2embed.cc/embed/anime/${anilistId}/${epNum}`,
+          url: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
         },
         {
           quality: '480p',
-          url: `https://vidsrc.me/embed/anime?mal=${malId}&ep=${epNum}`,
+          url: 'https://www.w3schools.com/html/mov_bbb.mp4',
         },
       ],
     };
@@ -545,7 +621,7 @@ export async function fetchAniListSchedule(): Promise<ScheduleItem[]> {
           seenAnimeIds.add(item.media.id);
 
           const d = new Date(item.airingAt * 1000);
-          const dayName = DAYS_MAP[d.getDay()] || 'Senin';
+          const dayName = DAYS_MAP[d.getDay()] || 'Monday';
           const hours = String(d.getHours()).padStart(2, '0');
           const minutes = String(d.getMinutes()).padStart(2, '0');
 

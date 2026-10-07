@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useNotificationStore, type Notification, type NotifType } from '@/store/useNotificationStore';
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -208,6 +209,15 @@ export function NotificationBell() {
               ))
             )}
           </div>
+
+          {/* Footer Link to full Notifications page */}
+          <Link
+            to="/notifications"
+            onClick={() => setOpen(false)}
+            className="block text-center text-xs font-display text-sunset hover:text-sunset-soft py-2.5 bg-canvas/80 border-t border-hairline transition-colors font-medium"
+          >
+            Lihat Semua Notifikasi →
+          </Link>
         </div>
       )}
     </div>

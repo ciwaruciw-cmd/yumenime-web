@@ -2,13 +2,15 @@ import { useState, useEffect, useRef } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { Button } from '@/components/ui/Button';
-import { NotificationBell, NotifItem } from '@/components/ui/NotificationBell';
 import { useAuthStore } from '@/store/useAuthStore';
 import { useWatchlistStore } from '@/store/useWatchlistStore';
+import { useHistoryStore } from '@/store/useHistoryStore';
 import { useNotificationStore } from '@/store/useNotificationStore';
 import { searchAnime } from '@/services/animeService';
 import { useDebounce } from '@/hooks/useDebounce';
 import { isAdminEmail, syncAdminEmailsFromServer } from '@/config/adminConfig';
+import { NotificationBell } from '@/components/ui/NotificationBell';
+import { ThemeToggle } from '@/components/common/ThemeToggle';
 import type { Anime } from '@/types/anime';
 
 /**
@@ -17,7 +19,6 @@ import type { Anime } from '@/types/anime';
  */
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [mobileNotifOpen, setMobileNotifOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Anime[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -29,6 +30,7 @@ export function Navbar() {
 
   const { isAuthenticated, user, logout } = useAuthStore();
   const { animeIds } = useWatchlistStore();
+  const { history } = useHistoryStore();
   const { notifications, unreadCount, markRead, markAllRead, removeNotification, clearAll } = useNotificationStore();
   const notifUnreadCount = unreadCount();
 
@@ -102,13 +104,13 @@ export function Navbar() {
   return (
     <header
       className={clsx(
-        'fixed top-0 left-0 right-0 z-40 transition-colors duration-200 transform-gpu',
+        'fixed top-0 left-0 right-0 z-40 transition-colors duration-200',
         scrolled
-          ? 'bg-[#0a0a0a]/98 border-b border-hairline shadow-sm'
-          : 'bg-[#0a0a0a]'
+          ? 'bg-canvas md:bg-canvas/95 md:backdrop-blur-md border-b border-hairline shadow-sm'
+          : 'bg-canvas border-b border-hairline/40'
       )}
     >
-      <div className="max-w-[1280px] mx-auto px-6 h-14 flex items-center gap-6">
+      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 h-12 sm:h-14 flex items-center gap-3 sm:gap-6">
         {/* Logo */}
         <Link
           to="/"
@@ -202,6 +204,20 @@ export function Navbar() {
         <div className="hidden md:flex items-center gap-2">
           {isAuthenticated && user ? (
             <>
+              <Link to="/history" className="relative" title="Watch History">
+                <Button variant="ghost" size="sm" aria-label={`Watch History (${history.length})`}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  {history.length > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-canvas-mid text-white text-[9px] rounded-full w-4 h-4 flex items-center justify-center font-mono border border-hairline">
+                      {history.length > 99 ? '99+' : history.length}
+                    </span>
+                  )}
+                </Button>
+              </Link>
+
               <Link to="/watchlist" className="relative">
                 <Button variant="ghost" size="sm" aria-label={`Watchlist (${animeIds.length})`}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -217,6 +233,9 @@ export function Navbar() {
 
               {/* Notification Bell */}
               <NotificationBell />
+
+              {/* Theme Toggle */}
+              <ThemeToggle />
 
               {/* Profile dropdown menu under avatar */}
               <div ref={profileRef} className="relative">
@@ -290,6 +309,44 @@ export function Navbar() {
                       </span>
                     </Link>
 
+                    <Link
+                      to="/history"
+                      onClick={() => setProfileOpen(false)}
+                      className="flex items-center justify-between px-3 py-2 text-xs text-body hover:text-ink hover:bg-white/5 rounded-[6px] transition-colors"
+                    >
+                      <span className="flex items-center gap-2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10" />
+                          <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                        Watch History
+                      </span>
+                      {history.length > 0 && (
+                        <span className="bg-canvas-mid text-ink font-mono text-[10px] px-1.5 py-0.5 rounded-full">
+                          {history.length}
+                        </span>
+                      )}
+                    </Link>
+
+                    <Link
+                      to="/notifications"
+                      onClick={() => setProfileOpen(false)}
+                      className="flex items-center justify-between px-3 py-2 text-xs text-body hover:text-ink hover:bg-white/5 rounded-[6px] transition-colors"
+                    >
+                      <span className="flex items-center gap-2">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M13.73 21a2 2 0 01-3.46 0" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        Notifications
+                      </span>
+                      {notifUnreadCount > 0 && (
+                        <span className="bg-sunset text-white font-mono text-[10px] px-1.5 py-0.5 rounded-full font-bold">
+                          {notifUnreadCount}
+                        </span>
+                      )}
+                    </Link>
+
                     {isAdmin && (
                       <Link
                         to="/admin"
@@ -323,6 +380,13 @@ export function Navbar() {
             </>
           ) : (
             <>
+              <Link to="/history" className="text-mute hover:text-white transition-colors p-1.5 mr-1" title="Watch History">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+              </Link>
+              <ThemeToggle />
               <Link to="/login">
                 <Button variant="outline-sm" size="sm">Sign In</Button>
               </Link>
@@ -333,11 +397,12 @@ export function Navbar() {
           )}
         </div>
 
-        {/* Mobile controls (Notification Bell at top + Hamburger button) */}
-        <div className="flex md:hidden items-center gap-1.5 ml-auto">
+        {/* Mobile controls (Theme Toggle + Notification Bell + Hamburger button) */}
+        <div className="flex md:hidden items-center gap-1 ml-auto">
+          <ThemeToggle />
           <NotificationBell />
           <button
-            className="text-body p-1.5 rounded-full hover:bg-white/5 transition-colors"
+            className="text-body p-1.5 rounded-full hover:bg-white/5 transition-colors cursor-pointer"
             onClick={() => setMenuOpen((v) => !v)}
             aria-label={menuOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={menuOpen}
@@ -394,68 +459,31 @@ export function Navbar() {
 
             <hr className="border-hairline my-2" />
 
-            {/* Notifications inside Mobile Menu */}
-            <div>
-              <button
-                onClick={() => setMobileNotifOpen((v) => !v)}
-                className="w-full flex items-center justify-between px-3 py-2 text-sm font-display text-body hover:text-ink hover:bg-white/5 rounded-[8px] transition-colors cursor-pointer"
-              >
-                <span className="flex items-center gap-2.5">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-mute">
-                    <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M13.73 21a2 2 0 01-3.46 0" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  Notifications
-                </span>
-                <div className="flex items-center gap-2">
-                  {notifUnreadCount > 0 && (
-                    <span className="bg-sunset text-white font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
-                      {notifUnreadCount} new
-                    </span>
-                  )}
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    className={`text-mute transition-transform duration-200 ${mobileNotifOpen ? 'rotate-180' : ''}`}
-                  >
-                    <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-              </button>
-
-              {mobileNotifOpen && (
-                <div className="mt-1 bg-canvas border border-hairline rounded-[8px] overflow-hidden mb-2 animate-fade-in-up">
-                  <div className="flex items-center justify-between px-3 py-2 border-b border-hairline bg-canvas-soft">
-                    <span className="text-[10px] font-mono text-mute uppercase tracking-wider">ANNOUNCEMENTS</span>
-                    <div className="flex gap-2">
-                      {notifUnreadCount > 0 && (
-                        <button onClick={markAllRead} className="text-[10px] text-mute hover:text-ink font-display cursor-pointer">
-                          Mark read
-                        </button>
-                      )}
-                      {notifications.length > 0 && (
-                        <button onClick={clearAll} className="text-[10px] text-red-400 hover:text-red-300 font-display cursor-pointer">
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div className="max-h-56 overflow-y-auto divide-y divide-hairline">
-                    {notifications.length === 0 ? (
-                      <p className="text-xs text-mute text-center py-4 font-display">No notifications</p>
-                    ) : (
-                      notifications.map((n) => (
-                        <NotifItem key={n.id} notif={n} onRead={markRead} onRemove={removeNotification} />
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
+            {/* Theme switcher */}
+            <div className="flex items-center justify-between px-3 py-2 bg-canvas-soft/80 border border-hairline rounded-[8px] my-1">
+              <span className="text-xs font-display text-mute">Tampilan Tema</span>
+              <ThemeToggle variant="compact" />
             </div>
+
+            {/* Notifications inside Mobile Menu */}
+            <Link
+              to="/notifications"
+              onClick={() => setMenuOpen(false)}
+              className="flex items-center justify-between px-3 py-2 text-sm font-display text-body hover:text-ink hover:bg-white/5 rounded-[8px] transition-colors"
+            >
+              <span className="flex items-center gap-2.5">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-mute">
+                  <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M13.73 21a2 2 0 01-3.46 0" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Notifications
+              </span>
+              {notifUnreadCount > 0 && (
+                <span className="bg-sunset text-white font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
+                  {notifUnreadCount} new
+                </span>
+              )}
+            </Link>
 
             {/* Watchlist inside Mobile Menu */}
             <Link
@@ -472,6 +500,26 @@ export function Navbar() {
               {animeIds.length > 0 && (
                 <span className="bg-sunset text-white font-mono text-[10px] px-2 py-0.5 rounded-full font-bold">
                   {animeIds.length}
+                </span>
+              )}
+            </Link>
+
+            {/* Watch History inside Mobile Menu */}
+            <Link
+              to="/history"
+              onClick={() => setMenuOpen(false)}
+              className="flex items-center justify-between px-3 py-2 text-sm font-display text-body hover:text-ink hover:bg-white/5 rounded-[8px] transition-colors"
+            >
+              <span className="flex items-center gap-2.5">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-mute">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                Watch History
+              </span>
+              {history.length > 0 && (
+                <span className="bg-canvas-card text-body-mid font-mono text-[10px] px-2 py-0.5 rounded-full font-bold border border-hairline">
+                  {history.length}
                 </span>
               )}
             </Link>

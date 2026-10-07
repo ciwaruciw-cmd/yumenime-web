@@ -58,7 +58,7 @@ export default function Genre() {
   };
 
   return (
-    <div className="page-enter pt-20 min-h-screen">
+    <div className="page-enter pt-14 sm:pt-20 min-h-screen">
       <div className="max-w-[1280px] mx-auto px-6">
         {/* Header */}
         <div className="mb-8">

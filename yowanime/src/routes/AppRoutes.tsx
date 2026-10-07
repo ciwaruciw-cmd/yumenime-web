@@ -1,4 +1,4 @@
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
 import { Skeleton } from '@/components/ui/SkeletonLoader';
 
@@ -12,8 +12,10 @@ const Genre = lazy(() => import('@/pages/Genre'));
 const Login = lazy(() => import('@/pages/Login'));
 const Register = lazy(() => import('@/pages/Register'));
 const Watchlist = lazy(() => import('@/pages/Watchlist'));
+const History = lazy(() => import('@/pages/History'));
 const Schedule = lazy(() => import('@/pages/Schedule'));
 const Profile = lazy(() => import('@/pages/Profile'));
+const Notifications = lazy(() => import('@/pages/Notifications'));
 const Admin = lazy(() => import('@/pages/Admin'));
 const NotFound = lazy(() => import('@/pages/NotFound'));
 
@@ -47,7 +49,9 @@ export function AppRoutes() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/watchlist" element={<Watchlist />} />
+        <Route path="/history" element={<History />} />
         <Route path="/profile" element={<Profile />} />
+        <Route path="/notifications" element={<Notifications />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="*" element={<NotFound />} />
       </Routes>

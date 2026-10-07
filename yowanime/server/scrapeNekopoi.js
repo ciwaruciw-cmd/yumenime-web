@@ -153,8 +153,29 @@ export async function scrapeNekopoi() {
             updatedAt: new Date().toISOString(),
           });
 
-          // Generate episode metadata objects
+          // Generate episode metadata objects with 1080p and 720p streams
           for (let i = 1; i <= epCount; i++) {
+            const epInfo = parsedEps[i - 1];
+            let streamUrl1080 = '';
+            let streamUrl720 = '';
+
+            if (epInfo && epInfo.url) {
+              try {
+                const epRes = await fetchUrl(epInfo.url);
+                const epHtml = epRes.body;
+                const iframeMatch = epHtml.match(/<iframe[^>]+src=["']([^"']+)["']/i);
+                if (iframeMatch) {
+                  streamUrl1080 = iframeMatch[1];
+                  streamUrl720 = iframeMatch[1];
+                }
+                const link1080 = epHtml.match(/href=["']([^"']+)["'][^>]*>(?:1080p|FULLHD)/i);
+                if (link1080) streamUrl1080 = link1080[1];
+                const link720 = epHtml.match(/href=["']([^"']+)["'][^>]*>(?:720p|HD)/i);
+                if (link720) streamUrl720 = link720[1];
+              } catch {}
+            }
+
+            const fallbackStream = streamUrl1080 || streamUrl720 || 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4';
             episodesMap.push({
               id: `${animeId}-ep-${i}`,
               animeId: animeId,
@@ -164,9 +185,9 @@ export async function scrapeNekopoi() {
               duration: 1500,
               aired: '2026-08-01',
               sources: [
-                { quality: '1080p', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4' },
-                { quality: '720p', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4' },
-                { quality: '480p', url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4' }
+                { quality: '1080p', url: streamUrl1080 || fallbackStream },
+                { quality: '720p',  url: streamUrl720  || fallbackStream },
+                { quality: '480p',  url: streamUrl720  || fallbackStream }
               ]
             });
           }

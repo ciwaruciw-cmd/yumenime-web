@@ -1,7 +1,9 @@
-import { useState, useRef, type FormEvent, type ChangeEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useRef, useEffect, useMemo, type FormEvent, type ChangeEvent } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuthStore, DEFAULT_FAVORITE_CHARACTERS } from '@/store/useAuthStore';
 import { useWatchlist } from '@/hooks/useWatchlist';
+import { useHistoryStore } from '@/store/useHistoryStore';
+import { useNotificationStore } from '@/store/useNotificationStore';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -11,6 +13,8 @@ import { AddCharacterModal } from '@/components/profile/AddCharacterModal';
 import { formatDate } from '@/utils/formatDate';
 import { isAdminEmail } from '@/config/adminConfig';
 import type { FavoriteCharacter } from '@/types/user';
+import { ThemeToggle } from '@/components/common/ThemeToggle';
+import { usePWAInstall } from '@/components/common/PWAInstallPrompt';
 
 export const PRESET_GIF_AVATARS = [
   {
@@ -44,19 +48,80 @@ export const isGifAvatar = (url?: string): boolean => {
   return url.toLowerCase().includes('.gif') || url.startsWith('data:image/gif');
 };
 
+function formatTimeAgo(iso: string): string {
+  try {
+    const diff = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(diff / 60000);
+    if (m < 1) return 'Just now';
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    const d = Math.floor(h / 24);
+    if (d < 30) return `${d}d ago`;
+    return new Date(iso).toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+  } catch {
+    return 'Just now';
+  }
+}
+
+function getNotifBadge(type: string) {
+  switch (type) {
+    case 'success':
+      return { label: 'Success', className: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' };
+    case 'warning':
+      return { label: 'Warning', className: 'bg-amber-500/20 text-amber-400 border-amber-500/30' };
+    case 'update':
+      return { label: 'Update', className: 'bg-sunset/20 text-sunset border-sunset/40' };
+    default:
+      return { label: 'Info', className: 'bg-twilight/20 text-twilight border-twilight/30' };
+  }
+}
+
 /**
  * User Profile Page — account details, favorite characters, watchlist overview, edit profile settings.
  * Supports direct image & GIF pick from device gallery via FileReader and custom GIF URLs.
  */
 export default function Profile() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { user, isAuthenticated, updateProfile, addFavoriteCharacter, removeFavoriteCharacter, logout } = useAuthStore();
   const { watchlistAnimes, count } = useWatchlist();
+  const { history, removeHistoryItem } = useHistoryStore();
+  const {
+    notifications,
+    fetchNotifications,
+    markRead,
+    markAllRead,
+    removeNotification,
+    clearAll,
+    unreadCount: getNotifUnreadCount,
+  } = useNotificationStore();
+
+  const notifUnread = getNotifUnreadCount();
+  const { canInstall, isInstalled, triggerInstall } = usePWAInstall();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'characters' | 'watchlist' | 'settings'>('overview');
+  type TabType = 'overview' | 'characters' | 'watchlist' | 'history' | 'notifications' | 'settings';
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [notifFilter, setNotifFilter] = useState<'all' | 'unread' | 'update'>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['overview', 'characters', 'watchlist', 'history', 'notifications', 'settings'].includes(tab)) {
+      setActiveTab(tab as TabType);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (tabId: TabType) => {
+    setActiveTab(tabId);
+    setSearchParams({ tab: tabId }, { replace: true });
+  };
   
   // Edit profile form state
   const [username, setUsername] = useState(user?.username ?? '');
@@ -66,7 +131,7 @@ export default function Profile() {
 
   if (!isAuthenticated || !user) {
     return (
-      <div className="page-enter pt-20 min-h-screen flex flex-col items-center justify-center px-6 text-center">
+      <div className="page-enter pt-14 sm:pt-20 min-h-screen flex flex-col items-center justify-center px-6 text-center">
         <div className="w-20 h-20 rounded-full bg-canvas-soft border border-hairline flex items-center justify-center mb-5">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-mute">
             <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 11a4 4 0 100-8 4 4 0 000 8z" strokeLinecap="round" strokeLinejoin="round" />
@@ -147,7 +212,7 @@ export default function Profile() {
   };
 
   return (
-    <div className="page-enter pt-20 pb-16 min-h-screen">
+    <div className="page-enter pt-14 sm:pt-20 pb-16 min-h-screen">
       {/* Hidden file input for gallery picker */}
       <input
         type="file"
@@ -270,12 +335,14 @@ export default function Profile() {
             { id: 'overview', label: 'Overview' },
             { id: 'characters', label: `Favorite Characters (${favCharCount}/15)` },
             { id: 'watchlist', label: `Watchlist (${count})` },
+            { id: 'history', label: `Watch History (${history.length})` },
+            { id: 'notifications', label: notifUnread > 0 ? `Notifications (${notifUnread})` : 'Notifications' },
             { id: 'settings', label: 'Profile Settings' },
           ].map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`px-4 py-2 text-sm font-display rounded-t-[6px] border-b-2 transition-colors duration-150 whitespace-nowrap ${
+              onClick={() => handleTabChange(tab.id as any)}
+              className={`px-4 py-2 text-sm font-display rounded-t-[6px] border-b-2 transition-colors duration-150 whitespace-nowrap cursor-pointer ${
                 activeTab === tab.id
                   ? 'border-sunset text-ink bg-white/5 font-medium'
                   : 'border-transparent text-mute hover:text-body hover:bg-white/5'
@@ -290,7 +357,7 @@ export default function Profile() {
         {activeTab === 'overview' && (
           <div className="space-y-8 animate-fade-in-up">
             {/* Quick stats grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <Card>
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-sunset/10 border border-sunset/30 flex items-center justify-center text-sunset">
@@ -315,6 +382,31 @@ export default function Profile() {
                   <div>
                     <p className="eyebrow-mono text-mute">FAV CHARACTERS</p>
                     <p className="display-sm text-ink">{favCharCount} <span className="text-xs text-body font-display">characters</span></p>
+                  </div>
+                </div>
+              </Card>
+
+              <Card
+                className="cursor-pointer hover:border-sunset/40 transition-all group"
+                onClick={() => handleTabChange('notifications')}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-sunset/10 border border-sunset/30 flex items-center justify-center text-sunset group-hover:scale-105 transition-transform">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M13.73 21a2 2 0 01-3.46 0" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                  <div>
+                    <p className="eyebrow-mono text-mute">NOTIFICATIONS</p>
+                    <p className="display-sm text-ink flex items-center gap-1.5">
+                      {notifications.length}
+                      {notifUnread > 0 && (
+                        <span className="text-[10px] font-mono font-bold bg-sunset text-white px-1.5 py-0.5 rounded-full">
+                          {notifUnread} new
+                        </span>
+                      )}
+                    </p>
                   </div>
                 </div>
               </Card>
@@ -351,7 +443,13 @@ export default function Profile() {
                   </div>
                   <div>
                     <p className="eyebrow-mono text-mute">WATCH TIME</p>
-                    <p className="text-sm font-display text-ink font-medium">0 Mins</p>
+                    <p className="text-sm font-display text-ink font-medium">
+                      {(() => {
+                        const totalSec = history.reduce((acc, h) => acc + (h.currentTime || 0), 0);
+                        if (totalSec >= 3600) return `${(totalSec / 3600).toFixed(1)} Hours`;
+                        return `${Math.round(totalSec / 60)} Mins`;
+                      })()}
+                    </p>
                   </div>
                 </div>
               </Card>
@@ -450,6 +548,71 @@ export default function Profile() {
                   <p className="text-body text-sm font-display mb-3">No anime in your watchlist yet.</p>
                   <Link to="/anime">
                     <Button variant="outline-sm" size="sm">Explore Anime</Button>
+                  </Link>
+                </Card>
+              )}
+            </div>
+
+            {/* Watch History preview */}
+            <div>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <span className="eyebrow-mono text-sunset block mb-1">HISTORY</span>
+                  <h2 className="display-sm text-ink">Recent Watch History</h2>
+                </div>
+                {history.length > 0 && (
+                  <Button variant="outline-sm" size="sm" onClick={() => setActiveTab('history')}>
+                    View All ({history.length})
+                  </Button>
+                )}
+              </div>
+
+              {history.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+                  {history.slice(0, 5).map((item) => (
+                    <Link
+                      key={`${item.animeId}-${item.episodeNumber}`}
+                      to={`/anime/${item.animeSlug || item.animeId}/episode/${item.episodeNumber}`}
+                      className="group bg-canvas-card border border-hairline hover:border-white/20 rounded-[8px] overflow-hidden transition-all hover:shadow-lg flex flex-col"
+                    >
+                      <div className="relative aspect-video bg-black overflow-hidden">
+                        <img
+                          src={item.episodeThumbnail || item.animePoster}
+                          alt={item.animeTitle}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                          loading="lazy"
+                        />
+                        <span className="absolute bottom-1 right-1 text-[9px] font-mono font-bold bg-black/80 text-white px-1 rounded">
+                          EP {item.episodeNumber}
+                        </span>
+                        {item.completed && (
+                          <span className="absolute top-1 left-1 bg-emerald-500 text-white text-[8px] font-bold px-1 rounded">
+                            ✓ Done
+                          </span>
+                        )}
+                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
+                          <div
+                            className={item.completed ? 'h-full bg-emerald-500' : 'h-full bg-sunset'}
+                            style={{ width: `${Math.min(100, Math.round(item.progress))}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="p-2.5 flex-1 flex flex-col justify-between">
+                        <h4 className="text-xs font-display font-medium text-white group-hover:text-sunset transition-colors truncate">
+                          {item.animeTitle}
+                        </h4>
+                        <p className="text-[10px] text-mute font-mono mt-1">
+                          {item.completed ? 'Done' : `${Math.round(item.progress)}%`}
+                        </p>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <Card className="text-center py-12">
+                  <p className="text-body text-sm font-display mb-3">No watch history recorded yet.</p>
+                  <Link to="/anime">
+                    <Button variant="outline-sm" size="sm">Start Watching</Button>
                   </Link>
                 </Card>
               )}
@@ -554,9 +717,351 @@ export default function Profile() {
           </div>
         )}
 
-        {/* Tab Content 4: Settings */}
+        {/* Tab Content 4: Watch History */}
+        {activeTab === 'history' && (
+          <div className="animate-fade-in-up space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="display-sm text-ink text-xl font-bold">Watch History</h2>
+                <p className="text-xs text-mute font-display mt-0.5">
+                  {history.length > 0 ? `${history.length} episodes saved` : 'No history yet'}
+                </p>
+              </div>
+              {history.length > 0 && (
+                <Link to="/history">
+                  <Button variant="outline-sm" size="sm">
+                    Open Full History Page →
+                  </Button>
+                </Link>
+              )}
+            </div>
+
+            {history.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {history.map((item) => (
+                  <div
+                    key={item.animeId}
+                    className="group bg-canvas-card border border-hairline hover:border-white/20 rounded-[10px] overflow-hidden transition-all flex flex-col justify-between"
+                  >
+                    <Link
+                      to={`/anime/${item.animeSlug || item.animeId}/episode/${item.episodeNumber}`}
+                      className="relative aspect-video bg-black block overflow-hidden"
+                    >
+                      <img
+                        src={item.episodeThumbnail || item.animePoster}
+                        alt={item.animeTitle}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                        loading="lazy"
+                      />
+                      <span className="absolute top-2 left-2 bg-black/80 text-white text-[10px] font-mono font-bold px-1.5 py-0.5 rounded">
+                        EP {item.episodeNumber}
+                      </span>
+                      {item.completed ? (
+                        <span className="absolute top-2 right-2 bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
+                          ✓ Done
+                        </span>
+                      ) : (
+                        <span className="absolute top-2 right-2 bg-sunset text-white text-[9px] font-mono font-bold px-1.5 py-0.5 rounded">
+                          {Math.round(item.progress)}%
+                        </span>
+                      )}
+                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
+                        <div
+                          className={item.completed ? 'h-full bg-emerald-500' : 'h-full bg-sunset'}
+                          style={{ width: `${Math.min(100, Math.round(item.progress))}%` }}
+                        />
+                      </div>
+                    </Link>
+
+                    <div className="p-3">
+                      <h4 className="font-display font-bold text-xs sm:text-sm text-white hover:text-sunset transition-colors truncate">
+                        {item.animeTitle}
+                      </h4>
+                      <p className="text-[11px] text-body-mid font-display truncate mt-0.5">
+                        {item.episodeTitle || `Episode ${item.episodeNumber}`}
+                      </p>
+
+                      <div className="mt-3 pt-2.5 border-t border-hairline flex items-center justify-between">
+                        <Link
+                          to={`/anime/${item.animeSlug || item.animeId}/episode/${item.episodeNumber}`}
+                          className="text-xs text-sunset font-display font-medium hover:underline flex items-center gap-1"
+                        >
+                          ▶ {item.completed ? 'Rewatch' : 'Continue'}
+                        </Link>
+                        <button
+                          onClick={() => removeHistoryItem(item.animeId)}
+                          title="Remove from history"
+                          className="text-mute hover:text-red-400 text-xs p-1 cursor-pointer"
+                        >
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Card className="text-center py-12">
+                <p className="text-body text-sm font-display mb-3">No watch history recorded yet.</p>
+                <Link to="/anime">
+                  <Button variant="outline-sm" size="sm">Explore Anime</Button>
+                </Link>
+              </Card>
+            )}
+          </div>
+        )}
+
+        {/* Tab Content 5: Notifications Full Page */}
+        {activeTab === 'notifications' && (
+          <div className="space-y-6 animate-fade-in-up">
+            {/* Header Box */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-canvas-card border border-hairline rounded-[12px] p-5 shadow-sm">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <h2 className="display-sm text-ink text-xl font-bold">Announcements &amp; Notifications</h2>
+                  {notifUnread > 0 && (
+                    <span className="bg-sunset text-white text-[10px] font-mono font-bold px-2 py-0.5 rounded-full">
+                      {notifUnread} unread
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-mute font-display">
+                  Anime episode updates, system info, and account announcements.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {notifUnread > 0 && (
+                  <Button
+                    variant="outline-sm"
+                    size="sm"
+                    onClick={markAllRead}
+                    className="text-xs flex items-center gap-1.5"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Mark All Read
+                  </Button>
+                )}
+                {notifications.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearAll}
+                    className="text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10 flex items-center gap-1.5"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                    </svg>
+                    Clear All
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Filter Pills */}
+            {notifications.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                {[
+                  { id: 'all', label: `All (${notifications.length})` },
+                  { id: 'unread', label: `Unread (${notifUnread})` },
+                  { id: 'update', label: `Update Anime (${notifications.filter((n) => n.type === 'update').length})` },
+                ].map((flt) => (
+                  <button
+                    key={flt.id}
+                    onClick={() => setNotifFilter(flt.id as any)}
+                    className={`px-3.5 py-1.5 text-xs font-display rounded-full border transition-all cursor-pointer ${
+                      notifFilter === flt.id
+                        ? 'bg-sunset text-white border-sunset shadow-sm font-semibold'
+                        : 'bg-canvas-card border-hairline text-body hover:text-white hover:border-white/30'
+                    }`}
+                  >
+                    {flt.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Notifications Cards */}
+            {(() => {
+              const items =
+                notifFilter === 'unread'
+                  ? notifications.filter((n) => !n.read)
+                  : notifFilter === 'update'
+                  ? notifications.filter((n) => n.type === 'update')
+                  : notifications;
+
+              if (items.length === 0) {
+                return (
+                  <Card className="text-center py-16">
+                    <div className="w-16 h-16 rounded-full bg-sunset/10 border border-sunset/30 flex items-center justify-center text-sunset mx-auto mb-4">
+                      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M13.73 21a2 2 0 01-3.46 0" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </div>
+                    <h3 className="display-sm text-ink text-base font-bold mb-1">
+                      {notifFilter === 'unread' ? 'All notifications read' : 'No Notifications Yet'}
+                    </h3>
+                    <p className="text-body text-xs font-display max-w-sm mx-auto mb-6">
+                      {notifFilter === 'unread'
+                        ? 'Great! You have read all notifications and announcements.'
+                        : 'System alerts, latest anime episode updates, and announcements will appear here.'}
+                    </p>
+                    {notifFilter !== 'all' && (
+                      <Button variant="outline-sm" size="sm" onClick={() => setNotifFilter('all')}>
+                        View All Notifications
+                      </Button>
+                    )}
+                  </Card>
+                );
+              }
+
+              return (
+                <div className="space-y-3">
+                  {items.map((item) => {
+                    const badge = getNotifBadge(item.type);
+                    return (
+                      <div
+                        key={item.id}
+                        onClick={() => !item.read && markRead(item.id)}
+                        className={`group relative bg-canvas-card border rounded-[12px] p-4 sm:p-5 transition-all duration-200 cursor-pointer ${
+                          !item.read
+                            ? 'border-hairline/80 bg-white/[0.02] border-l-4 border-l-sunset shadow-lg shadow-sunset/5'
+                            : 'border-hairline opacity-75 hover:opacity-100 hover:border-white/20'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                            {/* Type Icon Badge */}
+                            <div className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center border mt-0.5 ${badge.className}`}>
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                {item.type === 'success' ? (
+                                  <polyline points="20 6 9 17 4 12" />
+                                ) : item.type === 'warning' ? (
+                                  <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4m0 4h.01" />
+                                ) : (
+                                  <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
+                                )}
+                              </svg>
+                            </div>
+
+                            {/* Text content */}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className={`text-[9px] font-mono font-bold uppercase px-1.5 py-0.5 rounded border leading-none ${badge.className}`}>
+                                  {badge.label}
+                                </span>
+                                <h3 className={`text-sm sm:text-base font-display leading-tight ${!item.read ? 'text-white font-semibold' : 'text-ink font-medium'}`}>
+                                  {item.title}
+                                </h3>
+                              </div>
+                              <p className="text-xs sm:text-sm text-body-mid font-display leading-relaxed mt-1.5 whitespace-pre-wrap">
+                                {item.message}
+                              </p>
+                              <div className="flex items-center gap-3 mt-3 text-[11px] font-mono text-mute">
+                                <span>{formatTimeAgo(item.createdAt)}</span>
+                                {!item.read && (
+                                  <span className="text-sunset font-medium font-display flex items-center gap-1">
+                                    ● Unread
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex items-center gap-2 shrink-0">
+                            {!item.read ? (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  markRead(item.id);
+                                }}
+                                className="text-xs font-display text-sunset hover:underline px-2 py-1 rounded hover:bg-sunset/10 transition-colors"
+                                title="Mark as read"
+                              >
+                                Mark read
+                              </button>
+                            ) : (
+                              <span className="text-[11px] font-display text-mute">Read</span>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void removeNotification(item.id);
+                              }}
+                              className="text-mute hover:text-red-400 p-1.5 rounded hover:bg-white/10 transition-colors cursor-pointer"
+                              title="Delete notification"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polyline points="3 6 5 6 21 6" />
+                                <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* Tab Content 6: Settings */}
         {activeTab === 'settings' && (
-          <div className="max-w-xl animate-fade-in-up">
+          <div className="max-w-xl animate-fade-in-up space-y-6">
+            {/* Appearance & PWA Settings */}
+            <Card>
+              <h2 className="display-sm text-ink mb-1 text-base font-bold">Preferences &amp; App</h2>
+              <p className="text-xs text-body font-display mb-4">Pengaturan tema tampilan dan aplikasi web Yumenime.</p>
+
+              <div className="space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-hairline">
+                  <div>
+                    <h3 className="text-xs font-display text-ink font-semibold">Tema Tampilan</h3>
+                    <p className="text-[11px] text-mute font-display">Pilih tema favorit Anda (Dark, Light, AMOLED)</p>
+                  </div>
+                  <ThemeToggle variant="compact" />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-display text-ink font-semibold">Aplikasi Yumenime (PWA)</h3>
+                    <p className="text-[11px] text-mute font-display">
+                      {isInstalled ? 'Aplikasi sudah terpasang di perangkat ini' : 'Install ke homescreen untuk akses cepat & hemat kuota'}
+                    </p>
+                  </div>
+                  {isInstalled ? (
+                    <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
+                      ✓ Terpasang
+                    </span>
+                  ) : canInstall ? (
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      onClick={() => void triggerInstall()}
+                    >
+                      Install App
+                    </Button>
+                  ) : (
+                    <span className="text-[10px] font-mono text-mute bg-canvas-soft px-2 py-0.5 rounded border border-hairline">
+                      Web Browser
+                    </span>
+                  )}
+                </div>
+              </div>
+            </Card>
+
             <Card>
               <h2 className="display-sm text-ink mb-2">Edit Profile</h2>
               <p className="text-xs text-body font-display mb-6">Update your profile picture, username, and account email.</p>

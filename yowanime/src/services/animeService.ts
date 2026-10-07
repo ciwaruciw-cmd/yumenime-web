@@ -13,14 +13,20 @@ import {
   fetchAniListById,
   fetchAniListEpisodes,
 } from '@/services/anilistService';
-import {
-  mockAnimes,
-  mockEpisodes,
-  isDonghua,
-  getFeaturedAnime,
-  getTrendingAnimes,
-  getNewUpdateAnimes,
-} from '@/data/mockAnime';
+
+// Lazy loader for mock dataset: only loaded when user is completely offline
+let _cachedMockAnimes: Anime[] | null = null;
+async function getMockAnimes(): Promise<Anime[]> {
+  if (!_cachedMockAnimes) {
+    try {
+      const mod = await import('@/data/mockAnime');
+      _cachedMockAnimes = mod.mockAnimes;
+    } catch {
+      _cachedMockAnimes = [];
+    }
+  }
+  return _cachedMockAnimes;
+}
 
 // ── Public API ───────────────────────────────────────────────────────────────
 
@@ -43,24 +49,21 @@ export async function getAnimeList(params: AnimeFilterParams = {}): Promise<Anim
     };
   } catch (err) {
     console.warn('[animeService] AniList API error, falling back to mock:', err);
-    return getAnimeListMock(params);
+    return await getAnimeListMock(params);
   }
 }
 
 /** Fallback ke mock data lokal (case-insensitive genre matching) */
-function getAnimeListMock(params: AnimeFilterParams): AnimeListResponse {
-  let filtered = [...mockAnimes];
+async function getAnimeListMock(params: AnimeFilterParams): Promise<AnimeListResponse> {
+  const allMock = await getMockAnimes();
+  let filtered = [...allMock];
 
-  // Exclude hentai/adult content unless explicitly filtered by hentai genre
-  if (params.genre?.toLowerCase() !== 'hentai') {
+  // Exclude hentai/adult content unless explicitly filtered by hentai or yuri genre
+  const isAdultGenre = ['hentai', 'yuri'].includes(params.genre?.toLowerCase() ?? '');
+  if (!isAdultGenre) {
     filtered = filtered.filter(
       (a) => !a.genres.includes('Hentai') && a.rating !== '18+' && a.rating !== 'Rx'
     );
-  }
-
-  // Exclude Donghua anywhere unless explicitly searched
-  if (!params.search?.trim()) {
-    filtered = filtered.filter((a) => !isDonghua(a));
   }
 
   if (params.genre) {
@@ -105,28 +108,7 @@ function getAnimeListMock(params: AnimeFilterParams): AnimeListResponse {
 export async function getAnimeById(idOrSlug: string): Promise<Anime | null> {
   if (!idOrSlug) return null;
 
-  // 1. Check local mock dataset first (instant response, zero latency)
-  const localFound = mockAnimes.find(
-    (a) => a.id === idOrSlug || a.slug === idOrSlug || a.id.toLowerCase() === idOrSlug.toLowerCase()
-  );
-
-  if (localFound) {
-    // If no trailer yet, enrich with AniList trailer (max 2s timeout so we don't block UI)
-    if (!localFound.trailer) {
-      try {
-        const live = await Promise.race<Anime | null>([
-          fetchAniListById(localFound.title),
-          new Promise<null>((r) => setTimeout(() => r(null), 2000)),
-        ]);
-        if (live?.trailer) {
-          (localFound as Anime).trailer = live.trailer;
-        }
-      } catch { /* silently ignore */ }
-    }
-    return localFound;
-  }
-
-  // 2. Fallback to live AniList API
+  // 1. Live AniList API (with instant memory & session cache)
   try {
     const liveAnime = await fetchAniListById(idOrSlug);
     if (liveAnime) return liveAnime;
@@ -134,251 +116,359 @@ export async function getAnimeById(idOrSlug: string): Promise<Anime | null> {
     console.warn('[animeService] AniList detail error, falling back:', err);
   }
 
+  // 2. Fallback to scraped anime database
+  try {
+    const res = await fetch(`/api/scraped/animes?slug=${encodeURIComponent(idOrSlug)}`);
+    if (res.ok) {
+      const list = await res.json();
+      if (Array.isArray(list) && list.length > 0) {
+        return list[0];
+      }
+    }
+  } catch {
+    // offline fallback
+  }
+
+  // 3. Offline fallback to local mock dataset (lazy-loaded, zero cost on initial load)
+  try {
+    const allMock = await getMockAnimes();
+    const localFound = allMock.find(
+      (a) => a.id === idOrSlug || a.slug === idOrSlug || a.id.toLowerCase() === idOrSlug.toLowerCase()
+    );
+    if (localFound) return localFound;
+  } catch {}
+
   return null;
 }
 
-const DUMMY_DOMAINS = ['commondatastorage', 'vjs.zencdn', 'w3schools', 'mozilla.net'];
-
-function isRealStream(url?: string): boolean {
-  if (!url) return false;
-  return !DUMMY_DOMAINS.some((d) => url.includes(d));
+/**
+ * Cek apakah URL adalah dummy/sample video (bukan stream anime asli)
+ */
+function isDummyStream(url?: string): boolean {
+  if (!url) return true;
+  return (
+    url.includes('w3.org') ||
+    url.includes('zencdn') ||
+    url.includes('w3schools') ||
+    url.includes('commondatastorage') ||
+    url.includes('interactive-examples.mdn') ||
+    url.includes('oceans.mp4') ||
+    url.includes('sintel') ||
+    url.includes('mov_bbb') ||
+    url.includes('link.desustream.com') ||
+    url.includes('filedon.co') ||
+    url.includes('otakufiles.net') ||
+    url.includes('krakenfiles.com') ||
+    url.includes('googlevideo.com') ||
+    url.includes('.mkv')
+  );
 }
 
-function extractCoreTokens(str?: string): { mainTokens: string[]; seasonNum?: number } {
-  if (!str) return { mainTokens: [] };
+function sanitizeSources(sources: VideoSource[]): VideoSource[] {
+  const s1080 = sources.find((s) => s.quality === '1080p')?.url;
+  const s720 = sources.find((s) => s.quality === '720p')?.url;
+  const s480 = sources.find((s) => s.quality === '480p')?.url;
 
-  let clean = str.toLowerCase();
+  const real1080 = !isDummyStream(s1080) ? s1080 : undefined;
+  const real720 = !isDummyStream(s720) ? s720 : undefined;
+  const real480 = !isDummyStream(s480) ? s480 : undefined;
+  const bestReal = real1080 || real720 || real480;
 
-  let seasonNum: number | undefined;
-  const sMatch = clean.match(/season\s*(\d+)|(\d+)(?:st|nd|rd|th)\s*season|\bs(\d+)\b/i);
-  if (sMatch) {
-    seasonNum = parseInt(sMatch[1] || sMatch[2] || sMatch[3], 10);
+  if (bestReal) {
+    return [
+      { quality: '1080p', url: real1080 || bestReal },
+      { quality: '720p',  url: real720  || bestReal },
+      { quality: '480p',  url: real480  || real720 || bestReal },
+    ];
   }
+  return sources;
+}
 
-  clean = clean
-    .replace(/subtitle\s*indonesia/gi, '')
-    .replace(/sub\s*indo/gi, '')
-    .replace(/season\s*\d+|s\d+|\d+(?:st|nd|rd|th)\s*season/gi, '')
+function extractTokens(str: string): { tokens: string[]; season?: number } {
+  let season: number | undefined;
+  const clean = (str || '')
+    .toLowerCase()
+    .replace(/(?:season|s)\s*(\d+)|(\d+)(?:st|nd|rd|th)\s*season/gi, (_, s1, s2) => {
+      season = parseInt(s1 || s2);
+      return '';
+    })
+    .replace(/sub\s*indo|subtitle\s*indonesia/gi, '')
     .replace(/[^a-z0-9\s]/g, ' ')
     .trim();
 
-  const stopWords = new Set([
-    'the', 'and', 'for', 'sub', 'dub', 'in', 'of', 'to', 'a', 'an', 'no', 'wa',
-    'ga', 'de', 'ni', 'o', 'wo', 'kara', 'starting', 'life', 'another', 'world',
-    'hen', 'arc'
-  ]);
-
-  const mainTokens = clean
-    .split(/\s+/)
-    .filter((w) => w.length >= 2 && !stopWords.has(w));
-
-  return { mainTokens, seasonNum };
+  const stop = new Set(['the', 'and', 'for', 'sub', 'dub', 'in', 'of', 'to', 'a', 'an', 'no', 'wa', 'ga', 'de', 'ni', 'wo', 'da', 'datta']);
+  const tokens = clean.split(/\s+/).filter((w) => w.length >= 2 && !stop.has(w));
+  return { tokens, season };
 }
 
-function enrichSourcesWithLiveServers(
-  sources: VideoSource[] | undefined,
-  animeId: string,
-  malId: string | number | undefined,
-  epNum: number
-): VideoSource[] {
-  const realSources = (sources || []).filter((s) => isRealStream(s.url));
-  const liveServers: VideoSource[] = [
-    { quality: '1080p', url: `https://vidlink.pro/anime/${animeId}/${epNum}` },
-    { quality: '720p', url: `https://www.2embed.cc/embed/anime/${animeId}/${epNum}` },
-    { quality: '480p', url: `https://vidsrc.me/embed/anime?mal=${malId || animeId}&ep=${epNum}` },
-  ];
+/** Slug-based similarity score between query string and candidate */
+function slugScore(query: string, candidate: string): number {
+  if (!query || !candidate) return 0;
+  if (/^\d+$/.test(query.trim())) return 0; // Pure numeric IDs must not match as titles
 
-  if (realSources.length > 0) {
-    return [
-      liveServers[0],
-      ...realSources,
-      liveServers[1],
-      liveServers[2],
-    ];
+  const normalize = (s: string) =>
+    s.toLowerCase()
+      .replace(/sub\s*indo|subtitle\s*indonesia/gi, '')
+      .replace(/[^a-z0-9]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+
+  const q = normalize(query);
+  const c = normalize(candidate);
+
+  // Strip source prefix (otaku-, same-, sokuja-)
+  const cStripped = c.replace(/^(otaku|same|sokuja)-/, '');
+  // Strip trailing -sub-indo
+  const cClean = cStripped.replace(/-sub-indo$/, '');
+
+  if (q === cClean) return 1.0;
+  if (q.length >= 6 && (cClean.includes(q) || q.includes(cClean))) return 0.85;
+
+  const { tokens: qt, season: qs } = extractTokens(query);
+  const { tokens: ct, season: cs } = extractTokens(candidate);
+  if (qt.length === 0) return 0;
+
+  let matches = 0;
+  for (const t of qt) {
+    if (ct.some((c2) => c2 === t || (t.length >= 4 && c2.length >= 4 && (c2.includes(t) || t.includes(c2))))) {
+      matches++;
+    }
   }
-  return liveServers;
+  const tokenScore = matches / qt.length;
+  let seasonBonus = 0;
+  if (qs !== undefined && cs !== undefined) {
+    seasonBonus = qs === cs ? 0.3 : -0.5;
+  }
+  return Math.max(0, tokenScore + seasonBonus);
+}
+
+/**
+ * Resolve real-time 1080p and 720p stream from web scraper sources
+ */
+export async function resolveEpisodeStream(animeTitle: string, episodeNumber: number): Promise<VideoSource[]> {
+  if (!animeTitle) return [];
+  try {
+    const res = await fetch(`/api/stream/resolve?title=${encodeURIComponent(animeTitle)}&ep=${episodeNumber}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && Array.isArray(data.sources) && data.sources.length > 0) {
+        return sanitizeSources(data.sources);
+      }
+    }
+  } catch {
+    // offline fallback
+  }
+  return [];
+}
+
+/**
+ * Cari grup episode yang cocok dari scraped_episodes.json via API.
+ * Urutan prioritas: exact animeId → exact slug → fuzzy title match.
+ */
+async function findScrapedEpisodes(
+  animeId: string,
+  animeSlug: string,
+  animeTitles: string[]
+): Promise<{ episodes: any[]; hasReal: boolean } | null> {
+  try {
+    // 1. Try direct animeId and slug match first (fastest)
+    const candidateIds = [...new Set([animeId, animeSlug].filter(Boolean))];
+    for (const id of candidateIds) {
+      const r = await fetch(`/api/scraped/episodes?animeId=${encodeURIComponent(id)}`);
+      if (r.ok) {
+        const eps = await r.json();
+        if (Array.isArray(eps) && eps.length > 0) {
+          const hasReal = eps.some((e: any) => e.sources?.some((s: any) => !isDummyStream(s.url)));
+          if (hasReal) return { episodes: eps, hasReal: true };
+        }
+      }
+    }
+
+    // 2. Fetch all scraped animes and find matching candidates sorted by score
+    const animesRes = await fetch('/api/scraped/animes');
+    if (!animesRes.ok) return null;
+    const scrapedAnimes: any[] = await animesRes.json();
+
+    const candidates: Array<{ id: string; score: number }> = [];
+
+    for (const sa of scrapedAnimes) {
+      const candidateTitles = [sa.id, sa.slug, sa.title, sa.titleRomaji, sa.titleEnglish].filter(Boolean);
+      let maxScore = 0;
+      for (const qTitle of animeTitles) {
+        for (const cTitle of candidateTitles) {
+          const score = slugScore(qTitle, cTitle);
+          if (score > maxScore) {
+            maxScore = score;
+          }
+        }
+      }
+      if (maxScore >= 0.55) {
+        candidates.push({ id: sa.id, score: maxScore });
+      }
+    }
+
+    candidates.sort((a, b) => b.score - a.score);
+
+    for (const cand of candidates.slice(0, 5)) {
+      const r = await fetch(`/api/scraped/episodes?animeId=${encodeURIComponent(cand.id)}`);
+      if (r.ok) {
+        const eps = await r.json();
+        if (Array.isArray(eps) && eps.length > 0) {
+          const hasReal = eps.some((e: any) => e.sources?.some((s: any) => !isDummyStream(s.url)));
+          if (hasReal) return { episodes: eps, hasReal: true };
+        }
+      }
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 /**
  * Daftar episode anime berdasarkan ID / slug.
- * Menghubungkan AniList ID / search ke video stream Otakudesu/Samehadaku/Nekopoi asli dan live multi-server HD.
+ * Priority: scraped_episodes.json (real 1080p/720p) → AniList episode list → fallback stub
  */
 export async function getEpisodes(animeId: string): Promise<Episode[]> {
   if (!animeId) return [];
 
   const anime = await getAnimeById(animeId);
   const targetId = anime ? anime.id : animeId;
-  const targetSlug = anime ? anime.slug : animeId;
-  const malId = anime?.malId || anime?.id || animeId;
+  const targetSlug = anime ? (anime.slug || animeId) : animeId;
 
-  // ── Step 1: Direct match in mockEpisodes ──────────────────────────────────
-  const exact = mockEpisodes.filter(
-    (ep) =>
-      ep.animeId === targetId ||
-      ep.animeId === targetSlug ||
-      ep.animeId === animeId ||
-      ep.animeId.toLowerCase() === targetId.toLowerCase() ||
-      ep.animeId.toLowerCase() === targetSlug.toLowerCase()
-  );
-
-  if (exact.length > 0) {
-    const fallbackThumb = anime?.banner || anime?.poster || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600';
-    return exact
-      .sort((a, b) => a.number - b.number)
-      .map((ep) => ({
-        ...ep,
-        thumbnail: (ep.thumbnail && !ep.thumbnail.includes('unsplash.com'))
-          ? ep.thumbnail
-          : fallbackThumb,
-        sources: enrichSourcesWithLiveServers(ep.sources, targetId, malId, ep.number),
-      }));
-  }
-
-  // ── Step 2: Intelligent multi-title & season matcher ─────────────────────
-  const queryTitles = [
+  // Collect all possible title variants for fuzzy matching (exclude pure numeric IDs)
+  const animeTitles = [
     anime?.title,
     anime?.titleRomaji,
     anime?.titleEnglish,
     anime?.titleJapanese,
     targetSlug,
-    targetId,
-    animeId,
-  ].filter(Boolean) as string[];
+  ].filter((t) => t && !/^\d+$/.test(t.trim())) as string[];
 
-  // Group all mockEpisodes by animeId
-  const epGroups = new Map<string, Episode[]>();
-  mockEpisodes.forEach((ep) => {
-    const g = epGroups.get(ep.animeId) ?? [];
-    g.push(ep);
-    epGroups.set(ep.animeId, g);
-  });
-
-  let bestCandidateEpisodes: Episode[] = [];
-  let bestScore = 0;
-
-  for (const [groupAnimeId, groupEps] of epGroups.entries()) {
-    const firstEp = groupEps[0];
-    const hasReal = isRealStream(firstEp?.sources?.[0]?.url);
-    const hasRealThumb = firstEp?.thumbnail && !firstEp.thumbnail.includes('unsplash.com');
-    const isDirectStorage = firstEp?.sources?.[0]?.url?.includes('storages.sokuja.uk');
-    const targetGroupAnime = mockAnimes.find((a) => a.id === groupAnimeId || a.slug === groupAnimeId);
-
-    const candidateTitles = [
-      groupAnimeId,
-      targetGroupAnime?.title,
-      targetGroupAnime?.titleRomaji,
-      targetGroupAnime?.titleEnglish,
-      targetGroupAnime?.titleJapanese,
-      targetGroupAnime?.slug,
-    ].filter(Boolean) as string[];
-
-    for (const qTitle of queryTitles) {
-      const q = extractCoreTokens(qTitle);
-      if (q.mainTokens.length === 0) continue;
-
-      for (const cTitle of candidateTitles) {
-        const c = extractCoreTokens(cTitle);
-        if (c.mainTokens.length === 0) continue;
-
-        let tokenMatches = 0;
-        for (const qt of q.mainTokens) {
-          if (c.mainTokens.some((ct) => ct === qt || ct.includes(qt) || qt.includes(ct))) {
-            tokenMatches++;
-          }
-        }
-
-        const tokenScore = tokenMatches / q.mainTokens.length;
-
-        // Season bonus / penalty
-        let seasonBonus = 0;
-        if (q.seasonNum !== undefined && c.seasonNum !== undefined) {
-          if (q.seasonNum === c.seasonNum) seasonBonus = 0.35;
-          else seasonBonus = -0.6; // Wrong season penalty!
-        }
-
-        // Real stream and real thumbnail bonus: prioritize actual scraped streams & real episode thumbnails
-        const realBonus = hasReal ? 0.3 : 0;
-        const thumbBonus = hasRealThumb ? 0.25 : 0;
-        const storageBonus = isDirectStorage ? 0.2 : 0;
-
-        const totalScore = tokenScore + seasonBonus + realBonus + thumbBonus + storageBonus;
-
-        if (tokenMatches >= 1 && totalScore > bestScore && tokenScore >= 0.45) {
-          bestScore = totalScore;
-          bestCandidateEpisodes = groupEps;
-        }
-      }
-    }
-  }
-
-  const fallbackThumb = anime?.banner || anime?.poster || 'https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600';
-
-  if (bestCandidateEpisodes.length > 0) {
-    return bestCandidateEpisodes
+  // ── Priority 1: Real scraped episodes from database ──────────────────────
+  const scraped = await findScrapedEpisodes(targetId, targetSlug, animeTitles);
+  if (scraped && scraped.hasReal) {
+    return scraped.episodes
       .sort((a, b) => a.number - b.number)
-      .map((ep) => ({
-        ...ep,
-        thumbnail: (ep.thumbnail && !ep.thumbnail.includes('unsplash.com'))
+      .map((ep) => {
+        // Find if AniList has a streaming episode with specific screenshot and title
+        const streamingEp = anime?.streamingEpisodes?.find((se) => {
+          const m = se.title.match(/Episode\s+(\d+)/i);
+          return m && parseInt(m[1], 10) === ep.number;
+        }) || anime?.streamingEpisodes?.[ep.number - 1];
+
+        const isPosterFallback = !ep.thumbnail || ep.thumbnail === anime?.poster || ep.thumbnail === anime?.banner;
+        const finalThumbnail = !isPosterFallback
           ? ep.thumbnail
-          : fallbackThumb,
-        sources: enrichSourcesWithLiveServers(ep.sources, targetId, malId, ep.number),
-      }));
+          : (streamingEp?.thumbnail || ep.thumbnail || anime?.banner || anime?.poster);
+
+        return {
+          id: ep.id || `${targetId}-ep-${ep.number}`,
+          animeId: targetId,
+          number: ep.number,
+          title: ep.title || streamingEp?.title || `Episode ${ep.number}`,
+          thumbnail: finalThumbnail,
+          duration: ep.duration || 1440,
+          aired: ep.aired || ep.airedDate || '',
+          sources: sanitizeSources(ep.sources || []),
+        };
+      });
   }
 
-  // If exact match existed (even fallback), use it
-  if (exact.length > 0) {
-    return exact
-      .sort((a, b) => a.number - b.number)
-      .map((ep) => ({
-        ...ep,
-        thumbnail: (ep.thumbnail && !ep.thumbnail.includes('unsplash.com'))
-          ? ep.thumbnail
-          : fallbackThumb,
-        sources: enrichSourcesWithLiveServers(ep.sources, targetId, malId, ep.number),
-      }));
-  }
-
-  // ── Step 3: AniList fallback episode generation ───────────────────────────
+  // ── Priority 2: Fallback — AniList episode list ──────
+  // Generate ep stubs with no dummy streams; WatchEpisode will live-resolve streams via resolver
   if (anime) {
-    return fetchAniListEpisodes(anime);
+    const aniEps = fetchAniListEpisodes(anime);
+    if (aniEps.length > 0) {
+      return aniEps.map((ep) => ({
+        ...ep,
+        sources: [], // Empty = will be resolved live in WatchEpisode via resolveEpisodeStream
+      }));
+    }
+    // Only generate stubs if there are released episodes (never blindly fill 12 if ongoing)
+    const totalEps = anime.status === 'upcoming'
+      ? 0
+      : (anime.status === 'ongoing' ? 1 : (anime.episodes > 0 ? anime.episodes : 1));
+
+    if (totalEps <= 0) return [];
+
+    return Array.from({ length: Math.min(totalEps, 2000) }, (_, i) => {
+      const epNum = i + 1;
+      return {
+        id: `${targetId}-ep-${epNum}`,
+        animeId: targetId,
+        number: epNum,
+        title: `Episode ${epNum}`,
+        thumbnail: anime.banner || anime.poster || '',
+        duration: 1440,
+        aired: '',
+        sources: [], // Resolved live
+      };
+    });
   }
 
-  // ── Step 4: Final fallback with live multi-server streaming ───────────────
-  return Array.from({ length: 12 }, (_, i) => {
-    const epNum = i + 1;
-    return {
-      id: `${targetId}-ep-${epNum}`,
-      animeId: targetId,
-      number: epNum,
-      title: `Episode ${epNum}`,
-      thumbnail: fallbackThumb,
-      duration: 1440,
-      aired: '2026-08-01',
-      sources: enrichSourcesWithLiveServers(undefined, targetId, malId, epNum),
-    };
-  });
+  return [];
 }
 
 /**
  * Pencarian anime.
  */
 export async function searchAnime(query: string): Promise<Anime[]> {
-  if (!query.trim()) return [];
+  const cleanQ = query.trim();
+  if (!cleanQ) return [];
 
+  const results: Anime[] = [];
+  const seenIds = new Set<string>();
+
+  // 1. Live AniList search
   try {
-    const res = await fetchAniListList({ search: query.trim(), pageSize: 24 });
-    return res.data;
+    const res = await fetchAniListList({ search: cleanQ, pageSize: 24 });
+    for (const a of res.data) {
+      if (!seenIds.has(a.id) && !seenIds.has(a.slug)) {
+        seenIds.add(a.id);
+        seenIds.add(a.slug);
+        results.push(a);
+      }
+    }
   } catch (err) {
     console.warn('[animeService] Search error, falling back to mock:', err);
-    const q = query.toLowerCase();
-    return mockAnimes.filter(
-      (a) =>
-        a.title.toLowerCase().includes(q) ||
-        (a.titleEnglish?.toLowerCase().includes(q) ?? false) ||
-        a.studio.toLowerCase().includes(q)
-    );
+    try {
+      const mockList = await getMockAnimes();
+      const q = cleanQ.toLowerCase();
+      for (const a of mockList) {
+        if (
+          (a.title.toLowerCase().includes(q) ||
+          (a.titleEnglish?.toLowerCase().includes(q) ?? false) ||
+          a.studio.toLowerCase().includes(q)) &&
+          !seenIds.has(a.id) && !seenIds.has(a.slug)
+        ) {
+          seenIds.add(a.id);
+          seenIds.add(a.slug);
+          results.push(a);
+        }
+      }
+    } catch {}
   }
-}
 
-// ── Homepage data helpers ────────────────────────────────────────────────────
-export { getFeaturedAnime, getTrendingAnimes, getNewUpdateAnimes };
+  // 2. Scraped animes database search
+  try {
+    const r = await fetch(`/api/scraped/animes?title=${encodeURIComponent(cleanQ)}`);
+    if (r.ok) {
+      const scrapedList = await r.json();
+      if (Array.isArray(scrapedList)) {
+        for (const sa of scrapedList) {
+          if (!seenIds.has(sa.id) && !seenIds.has(sa.slug)) {
+            seenIds.add(sa.id);
+            seenIds.add(sa.slug);
+            results.push(sa);
+          }
+        }
+      }
+    }
+  } catch {
+    // offline
+  }
+
+  return results;
+}

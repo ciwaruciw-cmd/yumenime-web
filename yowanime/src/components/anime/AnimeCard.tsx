@@ -39,23 +39,25 @@ export function AnimeCard({ anime, className, compact = false }: AnimeCardProps)
   return (
     <div
       className={clsx(
-        'group relative flex flex-col bg-canvas-card border border-hairline rounded-[8px] overflow-hidden h-full cv-auto transform-gpu',
-        'transition-transform duration-200 hover:border-white/20 hover:-translate-y-0.5',
+        'group relative flex flex-col bg-canvas-card border border-hairline rounded-[8px] overflow-hidden h-full',
+        'md:transition-transform md:duration-200 hover:border-white/20 md:hover:-translate-y-0.5',
         className
       )}
     >
       {/* Poster */}
       <div className="relative aspect-[2/3] overflow-hidden bg-canvas-mid flex-shrink-0">
-        <Link to={`/anime/${anime.slug}`} aria-label={`View details for ${anime.title}`} className="block w-full h-full">
+        <Link to={`/anime/${anime.slug || anime.id}`} aria-label={`View details for ${anime.title}`} className="block w-full h-full">
           {!imgError ? (
             <img
               src={anime.poster}
               alt={anime.title}
-              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+              className="w-full h-full object-cover md:transition-transform md:duration-300 md:group-hover:scale-105"
               onError={() => setImgError(true)}
               referrerPolicy="no-referrer"
               loading="lazy"
               decoding="async"
+              width="230"
+              height="325"
             />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-canvas-soft via-canvas-mid to-canvas p-3 text-center border border-hairline/50">
@@ -95,8 +97,8 @@ export function AnimeCard({ anime, className, compact = false }: AnimeCardProps)
         </div>
 
         {/* Hover actions */}
-        <div className="absolute bottom-0 left-0 right-0 p-2 flex gap-1.5 translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-10">
-          <Link to={`/anime/${anime.slug}/episode/1`} className="flex-1">
+        <div className="absolute bottom-0 left-0 right-0 p-2 hidden md:flex gap-1.5 translate-y-full group-hover:translate-y-0 transition-transform duration-300 z-10">
+          <Link to={`/anime/${anime.slug || anime.id}/episode/1`} className="flex-1">
             <Button variant="primary" size="sm" fullWidth>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
                 <polygon points="5 3 19 12 5 21 5 3" />
@@ -129,7 +131,7 @@ export function AnimeCard({ anime, className, compact = false }: AnimeCardProps)
 
       {/* Info */}
       <div className="p-3 flex-1 flex flex-col gap-1">
-        <Link to={`/anime/${anime.slug}`}>
+        <Link to={`/anime/${anime.slug || anime.id}`}>
           <h3
             className={clsx(
               'font-display text-ink hover:text-ink-hover transition-colors line-clamp-2 leading-tight',

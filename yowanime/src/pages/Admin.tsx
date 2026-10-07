@@ -4,6 +4,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { useNotificationStore, type NotifType } from '@/store/useNotificationStore';
 import { fetchAniListList } from '@/services/anilistService';
 import { isAdminEmail, addAdminEmail, removeAdminEmail, syncAdminEmailsFromServer } from '@/config/adminConfig';
+import { apiFetch } from '@/services/api';
 import type { Anime, AnimeGenre } from '@/types/anime';
 
 const STAT_GENRES: AnimeGenre[] = ['Action', 'Romance', 'Fantasy', 'Comedy', 'Horror'];
@@ -25,7 +26,7 @@ function StatCard({ label, value, icon, accent }: { label: string; value: string
 function AnimeRow({ anime, rank }: { anime: Anime; rank: number }) {
   return (
     <Link
-      to={`/anime/${anime.slug}`}
+      to={`/anime/${anime.slug || anime.id}`}
       className="flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 hover:bg-white/5 rounded-[8px] transition-colors group min-w-0"
     >
       <span className="text-xs font-mono text-mute w-5 text-center shrink-0 group-hover:text-sunset font-bold">
@@ -60,7 +61,7 @@ function AnimeRow({ anime, rank }: { anime: Anime; rank: number }) {
   );
 }
 
-type TabKey = 'dashboard' | 'anime' | 'genre' | 'notif' | 'config';
+type TabKey = 'dashboard' | 'anime' | 'genre' | 'scraper' | 'notif' | 'config';
 
 export function Admin() {
   const { user, token, isAuthenticated } = useAuthStore();
@@ -83,14 +84,96 @@ export function Admin() {
   const [notifSent, setNotifSent] = useState(false);
   const [sendingNotif, setSendingNotif] = useState(false);
 
+  // Auto-Scraper management state
+  const [scraperStatus, setScraperStatus] = useState<{
+    isRunning?: boolean;
+    lastRun?: string | null;
+    lastSuccess?: string | null;
+    lastError?: string | null;
+    totalRuns?: number;
+    totalSuccess?: number;
+    nextScheduled?: string | null;
+    lastDuration?: string;
+  } | null>(null);
+  const [scrapingInProgress, setScrapingInProgress] = useState(false);
+  const [scraperMsg, setScraperMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const fetchScraperStatus = async () => {
+    try {
+      const res = await apiFetch<any>('/api/admin/scraper/status', {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(user?.email ? { 'x-admin-email': user.email } : {}),
+        },
+      });
+      setScraperStatus(res);
+    } catch (err: any) {
+      console.warn('Failed to fetch scraper status:', err);
+    }
+  };
+
+  const handleTriggerScrape = async (source: 'all' | 'nekopoi' | 'quick' = 'all') => {
+    setScrapingInProgress(true);
+    setScraperMsg(null);
+    const labels: Record<string, string> = {
+      all: 'Full (Incremental)',
+      quick: 'Cepat (Otakudesu only)',
+      nekopoi: 'Nekopoi',
+    };
+    try {
+      await apiFetch<any>('/api/admin/scraper/run', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(user?.email ? { 'x-admin-email': user.email } : {}),
+        },
+        body: JSON.stringify({ source, adminEmail: user?.email }),
+      });
+      setScraperMsg({ type: 'success', text: `Scrape [${labels[source] || source}] berhasil dimulai di background! Status akan diupdate otomatis.` });
+      setTimeout(fetchScraperStatus, 1500);
+    } catch (err: any) {
+      setScraperMsg({ type: 'error', text: `Gagal memicu scrape: ${err.message || 'Error'}` });
+    } finally {
+      setTimeout(() => setScrapingInProgress(false), 3000);
+    }
+  };
+
+  const handleResetScraperStatus = async () => {
+    try {
+      await apiFetch<any>('/api/admin/scraper/reset', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(user?.email ? { 'x-admin-email': user.email } : {}),
+        },
+        body: JSON.stringify({ adminEmail: user?.email }),
+      });
+      setScraperMsg({ type: 'success', text: 'Status scraper berhasil di-reset ke IDLE / STANDBY.' });
+      fetchScraperStatus();
+    } catch (err: any) {
+      setScraperMsg({ type: 'error', text: `Gagal me-reset status: ${err.message || 'Error'}` });
+    }
+  };
+
   const isServerAdmin = isAuthenticated && (user?.role === 'admin' || user?.isAdmin === true || isAdminEmail(user?.email));
 
   useEffect(() => {
     if (isServerAdmin) {
       fetchNotifications();
       syncAdminEmailsFromServer(token || undefined).then(setAdminEmails);
+      fetchScraperStatus();
     }
   }, [fetchNotifications, isServerAdmin, token]);
+
+  // Auto-poll status saat sedang di tab scraper
+  useEffect(() => {
+    if (!isServerAdmin || tab !== 'scraper') return;
+    fetchScraperStatus();
+    const interval = setInterval(fetchScraperStatus, 3000);
+    return () => clearInterval(interval);
+  }, [isServerAdmin, tab]);
 
   const handleSendNotif = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -129,13 +212,8 @@ export function Admin() {
     }
   };
 
-  // Redirect non-admins
-  if (!isServerAdmin) {
-    return <Navigate to="/" replace />;
-  }
-
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
+    if (!isServerAdmin) return;
     const load = async () => {
       setLoading(true);
       try {
@@ -158,7 +236,12 @@ export function Admin() {
       }
     };
     load();
-  }, []);
+  }, [isServerAdmin]);
+
+  // Redirect non-admins
+  if (!isServerAdmin) {
+    return <Navigate to="/" replace />;
+  }
 
   const tabs: { key: TabKey; label: string; icon: React.ReactNode }[] = [
     {
@@ -190,6 +273,16 @@ export function Admin() {
       ),
     },
     {
+      key: 'scraper',
+      label: 'Auto Scraper',
+      icon: (
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="23 4 23 10 17 10" />
+          <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" />
+        </svg>
+      ),
+    },
+    {
       key: 'notif',
       label: 'Notifications',
       icon: (
@@ -213,7 +306,7 @@ export function Admin() {
   const maxGenreCount = Math.max(...Object.values(genreData), 1);
 
   return (
-    <div className="page-enter pt-16 sm:pt-20 min-h-screen">
+    <div className="page-enter pt-12 sm:pt-14 min-h-screen">
       <div className="max-w-[1280px] mx-auto px-4 sm:px-6 pb-12">
         {/* Header */}
         <div className="mb-6 flex flex-col sm:flex-row sm:items-start justify-between gap-3">
@@ -373,7 +466,7 @@ export function Admin() {
                 return (
                   <Link
                     key={g}
-                    to={`/genre?g=${encodeURIComponent(g)}`}
+                    to={`/anime?genre=${encodeURIComponent(g)}`}
                     className="bg-canvas-card border border-hairline rounded-[12px] p-4 sm:p-5 hover:border-sunset/50 transition-colors block group"
                   >
                     <div className="flex items-start justify-between mb-4">
@@ -392,6 +485,184 @@ export function Admin() {
                   </Link>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* ── AUTO SCRAPER TAB ── */}
+        {tab === 'scraper' && (
+          <div className="animate-fade-in-up space-y-6">
+            {/* Scraper Status Overview */}
+            <div className="bg-canvas-card border border-hairline rounded-[12px] p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-hairline">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h2 className="text-base font-display text-ink font-semibold">Auto-Scraper Daemon</h2>
+                    {scraperStatus?.isRunning ? (
+                      <span className="flex items-center gap-1.5 text-[10px] font-mono font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2.5 py-0.5 rounded-full">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                        RUNNING
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5 text-[10px] font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2.5 py-0.5 rounded-full">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        IDLE / STANDBY
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-mute font-display">
+                    Scraping otomatis dari Otakudesu, Samehadaku, &amp; Sokuja setiap 6 jam via Node.js daemon.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={fetchScraperStatus}
+                    className="text-xs font-display text-mute hover:text-ink border border-hairline px-3 py-1.5 rounded-full hover:bg-white/5 transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="23 4 23 10 17 10" />
+                      <path d="M20.49 15a9 9 0 11-2.12-9.36L23 10" />
+                    </svg>
+                    Refresh
+                  </button>
+
+                  <button
+                    onClick={handleResetScraperStatus}
+                    title="Reset paksa status scraper jika macet atau tertinggal dalam mode Running"
+                    className="text-xs font-display text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/50 bg-red-500/10 px-3 py-1.5 rounded-full hover:bg-red-500/20 transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                    Reset Status
+                  </button>
+                </div>
+              </div>
+
+              {/* Toast Message */}
+              {scraperMsg && (
+                <div
+                  className={`p-3 rounded-[8px] text-xs font-display mb-4 flex items-center justify-between ${
+                    scraperMsg.type === 'success'
+                      ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400'
+                      : 'bg-red-500/10 border border-red-500/30 text-red-400'
+                  }`}
+                >
+                  <span>{scraperMsg.text}</span>
+                  <button onClick={() => setScraperMsg(null)} className="cursor-pointer font-bold">✕</button>
+                </div>
+              )}
+
+              {/* Status Stats Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
+                <div className="bg-canvas-soft border border-hairline rounded-[8px] p-3.5">
+                  <span className="text-[10px] font-mono text-mute uppercase tracking-wider block mb-1">Status Daemon</span>
+                  <p className="text-sm font-display font-semibold text-ink">
+                    {scraperStatus?.isRunning ? (
+                      <span className="text-amber-400">Sedang Scrape...</span>
+                    ) : (
+                      <span className="text-emerald-400">Aktif (Siap)</span>
+                    )}
+                  </p>
+                </div>
+
+                <div className="bg-canvas-soft border border-hairline rounded-[8px] p-3.5">
+                  <span className="text-[10px] font-mono text-mute uppercase tracking-wider block mb-1">Terakhir Sukses</span>
+                  <p className="text-sm font-display font-semibold text-ink truncate">
+                    {scraperStatus?.lastSuccess ? new Date(scraperStatus.lastSuccess).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Belum pernah'}
+                  </p>
+                </div>
+
+                <div className="bg-canvas-soft border border-hairline rounded-[8px] p-3.5">
+                  <span className="text-[10px] font-mono text-mute uppercase tracking-wider block mb-1">Durasi Terakhir</span>
+                  <p className="text-sm font-display font-semibold text-ink truncate">
+                    {scraperStatus?.lastDuration || (scraperStatus?.isRunning ? 'Berjalan...' : '-')}
+                  </p>
+                </div>
+
+                <div className="bg-canvas-soft border border-hairline rounded-[8px] p-3.5">
+                  <span className="text-[10px] font-mono text-mute uppercase tracking-wider block mb-1">Total Sukses / Run</span>
+                  <p className="text-sm font-display font-semibold text-ink">
+                    {scraperStatus?.totalSuccess ?? 0} / {scraperStatus?.totalRuns ?? 0}
+                  </p>
+                </div>
+              </div>
+
+              {/* Manual Action Buttons */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleTriggerScrape('all')}
+                  disabled={scrapingInProgress || scraperStatus?.isRunning}
+                  className="bg-sunset hover:bg-sunset/90 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-display font-medium px-4 py-2.5 rounded-[8px] flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md shadow-sunset/10"
+                >
+                  {scrapingInProgress ? (
+                    <>
+                      <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Memulai Scrape...
+                    </>
+                  ) : (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                      </svg>
+                      Scrape Semua Sumber
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTriggerScrape('quick')}
+                  disabled={scrapingInProgress || scraperStatus?.isRunning}
+                  className="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 disabled:opacity-40 disabled:cursor-not-allowed text-emerald-400 text-xs font-display font-medium px-4 py-2.5 rounded-[8px] flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  title="Hanya scrape Otakudesu, lebih cepat (~2 menit)"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+                  </svg>
+                  Scrape Cepat (Otakudesu)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTriggerScrape('nekopoi')}
+                  disabled={scrapingInProgress || scraperStatus?.isRunning}
+                  className="bg-canvas-soft hover:bg-white/10 border border-hairline disabled:opacity-40 disabled:cursor-not-allowed text-ink text-xs font-display font-medium px-4 py-2.5 rounded-[8px] flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="8" x2="12" y2="12" />
+                  </svg>
+                  Scrape Nekopoi
+                </button>
+
+                {scraperStatus?.isRunning && (
+                  <button
+                    type="button"
+                    onClick={handleResetScraperStatus}
+                    className="bg-red-500/15 hover:bg-red-500/25 border border-red-500/40 text-red-400 text-xs font-display font-medium px-4 py-2.5 rounded-[8px] flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10" />
+                      <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                    </svg>
+                    Hentikan / Reset Status
+                  </button>
+                )}
+              </div>
+
+              {scraperStatus?.lastError ? (
+                <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-[8px] text-xs font-mono text-red-400">
+                  <span className="font-bold">Error Terakhir: </span>{scraperStatus.lastError}
+                </div>
+              ) : scraperStatus && !scraperStatus.isRunning && (
+                <div className="mt-4 p-3 bg-emerald-500/5 border border-emerald-500/20 rounded-[8px] text-xs font-mono text-emerald-400/70">
+                  <span className="font-bold">✓ </span>Tidak ada error. Scraper berjalan normal.
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -14,7 +14,8 @@ const STATUS_OPTIONS: { label: string; value: AnimeStatus | '' }[] = [
   { label: 'Upcoming', value: 'upcoming' },
 ];
 
-const YEAR_OPTIONS = [2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015];
+const currentYear = new Date().getFullYear();
+const YEAR_OPTIONS = Array.from({ length: 15 }, (_, i) => currentYear - i);
 
 const SORT_OPTIONS: { label: string; value: AnimeFilterParams['sort'] }[] = [
   { label: 'Latest', value: 'latest' },
@@ -80,7 +81,7 @@ export default function AnimeList() {
   };
 
   return (
-    <div className="page-enter pt-20">
+    <div className="page-enter pt-14 sm:pt-20">
       <div className="max-w-[1280px] mx-auto px-6">
         {/* Page header */}
         <div className="mb-6">

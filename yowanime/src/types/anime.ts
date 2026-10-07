@@ -54,7 +54,8 @@ export interface Anime {
   titleJapanese?: string;
   synopsis: string;
   synopsisShort: string;
-  poster: string;          // URL to poster image
+  poster: string;          // URL to poster image (optimized for cards/lists)
+  posterHD?: string;       // URL to high-res poster for Hero & Detail
   banner?: string;         // URL to wide banner image
   trailer?: string;        // YouTube/embed URL
   genres: AnimeGenre[];
@@ -68,6 +69,16 @@ export interface Anime {
   episodes: number;        // total episode count (0 = ongoing unknown)
   duration: number;        // minutes per episode
   characters?: AnimeCharacter[];
+  streamingEpisodes?: Array<{
+    title: string;
+    thumbnail?: string;
+    url?: string;
+    site?: string;
+  }>;
+  nextAiringEpisode?: {
+    episode: number;
+    airingAt: number;
+  };
   malId?: number;          // MyAnimeList ID for live data fetching
   isFeatured?: boolean;
   isTrending?: boolean;

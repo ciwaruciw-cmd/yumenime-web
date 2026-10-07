@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useCommentStore } from '@/store/useCommentStore';
 import { useAuthStore } from '@/store/useAuthStore';
+import { isAdminEmail } from '@/config/adminConfig';
 import type { Comment } from '@/types/comment';
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -98,9 +99,10 @@ function ReplyForm({ parentId, parentUsername, animeId, episodeId, onClose }: Re
     e.preventDefault();
     if (!text.trim() || !user || !token) return;
     setSubmitting(true);
+    const isUserAdmin = Boolean(user.role === 'admin' || user.isAdmin === true || isAdminEmail(user.email));
     await addComment(
       { animeId, episodeId, content: text.trim(), parentId },
-      token, user.id, user.username, user.avatar, user.isAdmin === true,
+      token, user.id, user.username, user.avatar, isUserAdmin,
     );
     setText('');
     setSubmitting(false);
@@ -318,9 +320,10 @@ export function CommentSection({ animeId, episodeId }: CommentSectionProps) {
     e.preventDefault();
     if (!text.trim() || !user || !token) return;
     setSubmitting(true);
+    const isUserAdmin = Boolean(user.role === 'admin' || user.isAdmin === true || isAdminEmail(user.email));
     await addComment(
       { animeId, episodeId, content: text.trim() },
-      token, user.id, user.username, user.avatar, user.isAdmin === true,
+      token, user.id, user.username, user.avatar, isUserAdmin,
     );
     setText('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -442,7 +445,7 @@ export function CommentSection({ animeId, episodeId }: CommentSectionProps) {
               cacheKey={cacheKey}
               token={token}
               currentUserId={user?.id}
-              currentUserIsAdmin={user?.role === 'admin' || user?.isAdmin === true}
+              currentUserIsAdmin={Boolean(user && (user.role === 'admin' || user.isAdmin === true || isAdminEmail(user.email)))}
               animeId={animeId}
               episodeId={episodeId}
             />

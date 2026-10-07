@@ -98,7 +98,7 @@ export default function Schedule() {
   }, [filteredItems]);
 
   return (
-    <div className="page-enter pt-20 min-h-screen pb-16">
+    <div className="page-enter pt-14 sm:pt-20 min-h-screen pb-16">
       <div className="max-w-[1280px] mx-auto px-6">
         {/* Header */}
         <div className="mb-8">
@@ -257,7 +257,7 @@ function ScheduleCard({ item }: { item: ScheduleItem }) {
     <div className="group bg-canvas-card border border-hairline hover:border-white/20 rounded-[10px] p-3.5 flex gap-3.5 transition-colors duration-200 cv-auto transform-gpu">
       {/* Poster */}
       <Link
-        to={`/anime/${anime.slug}`}
+        to={`/anime/${anime.slug || anime.id}`}
         className="relative w-20 sm:w-24 aspect-[2/3] rounded-[6px] overflow-hidden bg-canvas-mid shrink-0 block"
       >
         {!imgError ? (
@@ -303,7 +303,7 @@ function ScheduleCard({ item }: { item: ScheduleItem }) {
           </div>
 
           {/* Title */}
-          <Link to={`/anime/${anime.slug}`}>
+          <Link to={`/anime/${anime.slug || anime.id}`}>
             <h3 className="text-xs sm:text-sm font-display font-medium text-ink line-clamp-2 group-hover:text-sunset transition-colors leading-snug">
               {anime.title}
             </h3>
@@ -328,7 +328,7 @@ function ScheduleCard({ item }: { item: ScheduleItem }) {
             ))}
           </div>
 
-          <Link to={`/anime/${anime.slug}/episode/1`}>
+          <Link to={`/anime/${anime.slug || anime.id}/episode/1`}>
             <button className="bg-white text-black hover:bg-white/90 text-[11px] font-display font-medium px-3 py-1 rounded-full inline-flex items-center gap-1 transition-colors cursor-pointer shrink-0">
               <svg width="9" height="9" viewBox="0 0 24 24" fill="currentColor">
                 <polygon points="5 3 19 12 5 21 5 3" />

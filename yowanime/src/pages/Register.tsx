@@ -29,16 +29,20 @@ export default function Register() {
       return;
     }
 
-    await register({ username, email, password });
-    if (useAuthStore.getState().isAuthenticated) {
-      navigate('/');
+    try {
+      await register({ username, email, password });
+      if (useAuthStore.getState().isAuthenticated) {
+        navigate('/');
+      }
+    } catch {
+      // Handled by store error state
     }
   };
 
   const displayError = localError || error;
 
   return (
-    <div className="page-enter pt-20 min-h-screen flex items-center justify-center px-6">
+    <div className="page-enter pt-14 sm:pt-20 min-h-screen flex items-center justify-center px-6">
       <div className="w-full max-w-sm">
         <div className="bg-canvas-soft border border-hairline rounded-[8px] p-6 md:p-8">
           {/* Header */}

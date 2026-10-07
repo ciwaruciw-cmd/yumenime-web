@@ -119,6 +119,37 @@ function slugify(text) {
     .replace(/[^\w\-]+/g, '')
     .replace(/\-\-+/g, '-');
 }
+const SITE_LOGO_PATTERNS = [
+  'Otakudesu.png', 'otakudesu.png', 'samehadaku.png',
+  '/logo.', '/favicon', 'default-thumbnail', 'no-image',
+  'placeholder', 'noimage', 'no_image',
+];
+function isSiteLogo(url) {
+  return SITE_LOGO_PATTERNS.some(p => url.includes(p));
+}
+
+/**
+ * Ekstrak thumbnail spesifik episode dari HTML halaman episode.
+ * Urutan prioritas:
+ * 1. og:image (kecuali logo situs) 2. JSON-LD thumbnailUrl/image
+ * 3. twitter:image 4. konten img 5. fallback poster anime
+ */
+function extractEpThumbnail(html, fallback) {
+  const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
+  if (ogMatch && ogMatch[1] && ogMatch[1].startsWith('http') && !isSiteLogo(ogMatch[1])) return ogMatch[1];
+  const thumbMatch = html.match(/"thumbnailUrl"\s*:\s*"(https?:\/\/[^"]+)"/);
+  if (thumbMatch && !isSiteLogo(thumbMatch[1])) return thumbMatch[1];
+  const jsonLdImgMatch = html.match(/"image"\s*:\s*"(https?:\/\/[^"]+)"/);
+  if (jsonLdImgMatch && !isSiteLogo(jsonLdImgMatch[1])) return jsonLdImgMatch[1];
+  const twMatch = html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
+    || html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
+  if (twMatch && twMatch[1] && twMatch[1].startsWith('http') && !isSiteLogo(twMatch[1])) return twMatch[1];
+  const contentImgMatch = html.match(/class=["'][^"']*(?:entry-content|post-content|content-area|episodeInfo)[^"']*["'][^>]*>[\s\S]{0,500}?<img[^>]+src=["'](https?:\/\/[^"']+)["']/i);
+  if (contentImgMatch && !isSiteLogo(contentImgMatch[1])) return contentImgMatch[1];
+  return fallback || '';
+}
+
 
 /**
  * Concurrent async pool runner — executes fn over items with max concurrency.
@@ -260,6 +291,7 @@ async function scrapeOtakudesu() {
           try {
             const epRes = await fetchUrl(epData.url);
             const epHtml = epRes.body;
+            const epThumbnail = extractEpThumbnail(epHtml, posterUrl);
 
             // 1. Try to fetch 720p mirror stream via AJAX
             const allContents = [...epHtml.matchAll(/data-content=["']([^"']+)["']/gi)];
@@ -320,7 +352,7 @@ async function scrapeOtakudesu() {
             animeId: animeId,
             number: epNum,
             title: `Episode ${epNum}: ${cleanTitle}`,
-            thumbnail: posterUrl,
+            thumbnail: epThumbnail,
             duration: 1440,
             aired: new Date().toISOString().split('T')[0],
             sources: [
@@ -454,6 +486,7 @@ async function scrapeSamehadaku() {
           try {
             const epRes = await fetchUrl(epUrl);
             const epHtml = epRes.body;
+            const epThumbnail = extractEpThumbnail(epHtml, posterUrl);
 
             // Extract all player options
             const optionMatches = [...epHtml.matchAll(/class=["'][^"']*east_player_option[^"']*["'][^>]*data-post=["'](\d+)["'][^>]*data-nume=["'](\d+)["'][^>]*data-type=["']([^"']+)["'][^>]*>([\s\S]*?)<\/(?:li|div|a|span)/gi)];
@@ -522,7 +555,7 @@ async function scrapeSamehadaku() {
             animeId: animeId,
             number: epNum,
             title: `Episode ${epNum}: ${cleanTitle}`,
-            thumbnail: posterUrl,
+            thumbnail: epThumbnail,
             duration: 1440,
             aired: new Date().toISOString().split('T')[0],
             sources: [
@@ -719,9 +752,8 @@ async function scrapeSokuja() {
             const epRes = await fetchUrl(epUrl);
             const epHtml = epRes.body;
 
-            // Thumbnail from JSON-LD TVEpisode thumbnailUrl
-            const thumbMatch = epHtml.match(/"thumbnailUrl"\s*:\s*"(https?:\/\/[^"]+)"/);
-            if (thumbMatch) epThumbnail = thumbMatch[1];
+            // Ekstrak thumbnail spesifik episode (og:image, JSON-LD, dll) dengan filter logo
+            epThumbnail = extractEpThumbnail(epHtml, posterUrl);
 
             // Extract episodeId dari RSC payload (bisa escaped: \"episodeId\":12345)
             const epIdMatch = epHtml.match(/episodeId[^\d]*(\d+)/);

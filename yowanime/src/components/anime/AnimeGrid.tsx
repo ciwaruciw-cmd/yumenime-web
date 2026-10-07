@@ -43,7 +43,10 @@ export function AnimeGrid({
     const el = sentinelRef.current;
     if (!el || !onLoadMore) return;
 
-    const observer = new IntersectionObserver(handleObserver, { threshold: 0.1 });
+    const observer = new IntersectionObserver(handleObserver, {
+      threshold: 0.1,
+      rootMargin: '300px',
+    });
     observer.observe(el);
     return () => observer.disconnect();
   }, [handleObserver, onLoadMore]);
