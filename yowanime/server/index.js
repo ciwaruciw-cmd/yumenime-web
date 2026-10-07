@@ -813,17 +813,21 @@ app.post('/api/admin/scraper/reset', authenticateToken, requireAdmin, (_req, res
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-app.listen(PORT, () => {
-  console.log(`Yowanime PostgreSQL API Server running on http://localhost:${PORT}`);
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Yowanime PostgreSQL API Server running on http://localhost:${PORT}`);
 
-  // ── Auto-scraper scheduler ──────────────────────────────────────
-  const scraperEnabled = process.env.AUTO_SCRAPE !== 'false'; // default ON
-  if (scraperEnabled) {
-    startScheduler({
-      intervalHours: process.env.SCRAPE_INTERVAL_HOURS ?? 6,
-      runOnStart: process.env.SCRAPE_ON_START === 'true',
-    });
-  } else {
-    console.log('[AutoScraper] ⚠️  Dinonaktifkan (AUTO_SCRAPE=false)');
-  }
-});
+    // ── Auto-scraper scheduler ──────────────────────────────────────
+    const scraperEnabled = process.env.AUTO_SCRAPE !== 'false'; // default ON
+    if (scraperEnabled) {
+      startScheduler({
+        intervalHours: process.env.SCRAPE_INTERVAL_HOURS ?? 6,
+        runOnStart: process.env.SCRAPE_ON_START === 'true',
+      });
+    } else {
+      console.log('[AutoScraper] ⚠️  Dinonaktifkan (AUTO_SCRAPE=false)');
+    }
+  });
+}
+
+export default app;
