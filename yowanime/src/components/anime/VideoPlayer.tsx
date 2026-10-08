@@ -94,8 +94,7 @@ export function VideoPlayer({
     !url.includes('meownime.ltd') &&
     !url.includes('otakufiles.net') &&
     !url.includes('krakenfiles.com') &&
-    !url.includes('.mkv') &&
-    !url.includes('commondatastorage');
+    !url.includes('.mkv');
 
   // Auto-select highest available real quality (prefer 1080p, then 720p, then 480p)
   useEffect(() => {
@@ -762,6 +761,25 @@ export function VideoPlayer({
         </div>
       )}
 
+      {/* Title bar overlay — always shown so the Yumenime player identity is consistent */}
+      {title && (
+        <div className="absolute top-0 left-0 right-0 px-3 sm:px-4 pt-2 sm:pt-3 pb-6 bg-gradient-to-b from-black/80 to-transparent pointer-events-none z-10">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-white text-xs sm:text-sm font-display truncate flex-1 min-w-0">
+              {episodeNumber !== undefined && (
+                <span className="text-sunset mr-1.5 font-mono text-[10px] sm:text-xs font-semibold">
+                  EP {episodeNumber}
+                </span>
+              )}
+              <span>{title}</span>
+            </p>
+            <span className="shrink-0 whitespace-nowrap text-[9px] sm:text-[10px] font-mono bg-sunset/20 text-sunset px-1.5 sm:px-2 py-0.5 rounded border border-sunset/30 pointer-events-auto">
+              {currentServerFallback.name.split(' ')[0]} {currentServerFallback.name.split(' ')[1]}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Controls overlay */}
       {!isIframeUrl && (
         <div
@@ -770,24 +788,6 @@ export function VideoPlayer({
             showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'
           )}
         >
-          {/* Title bar */}
-          {title && (
-            <div className="absolute top-0 left-0 right-0 px-3 sm:px-4 pt-2 sm:pt-3 pb-6 bg-gradient-to-b from-black/80 to-transparent pointer-events-none z-10">
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-white text-xs sm:text-sm font-display truncate flex-1 min-w-0">
-                  {episodeNumber !== undefined && (
-                    <span className="text-sunset mr-1.5 font-mono text-[10px] sm:text-xs font-semibold">
-                      EP {episodeNumber}
-                    </span>
-                  )}
-                  <span>{title}</span>
-                </p>
-                <span className="shrink-0 whitespace-nowrap text-[9px] sm:text-[10px] font-mono bg-sunset/20 text-sunset px-1.5 sm:px-2 py-0.5 rounded border border-sunset/30 pointer-events-auto">
-                  {currentServerFallback.name.split(' ')[0]} {currentServerFallback.name.split(' ')[1]}
-                </span>
-              </div>
-            </div>
-          )}
 
           {/* Bottom controls */}
           <div className="bg-gradient-to-t from-black/95 via-black/60 to-transparent px-2.5 sm:px-4 pb-2 sm:pb-3 pt-6 sm:pt-8 space-y-1.5 sm:space-y-2">

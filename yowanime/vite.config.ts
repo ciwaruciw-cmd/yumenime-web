@@ -10,7 +10,7 @@ import jwt from 'jsonwebtoken'
 // @ts-ignore
 import { resolveStreamForEpisode } from './server/streamResolver.js'
 // @ts-ignore
-import { runScrape, getStatus as getScrapeStatus, resetStatus as resetScrapeStatus } from './server/autoScraper.js'
+import { runScrape, getStatus as getScrapeStatus, resetStatus as resetScrapeStatus, getLogs } from './server/autoScraper.js'
 
 const DEFAULT_ADMIN_EMAILS = [
   'omgnaoiyui@gmail.com',
@@ -451,6 +451,88 @@ function apiDevPlugin(): Plugin {
 
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify(getScrapeStatus()));
+          return;
+        }
+
+        // GET /api/admin/scraper/overview (Admin only)
+        if (req.method === 'GET' && url.pathname === '/api/admin/scraper/overview') {
+          if (!checkIsAdmin(req)) {
+            res.statusCode = 403;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'Akses ditolak. Diperlukan hak akses Admin.' }));
+            return;
+          }
+
+          const animes = readData(scrapedAnimesFile, []);
+          const episodes = readData(scrapedEpisodesFile, []);
+          const status = getScrapeStatus();
+          const logs = getLogs ? getLogs() : [];
+
+          const otakudesuCount = animes.filter((a: any) => a.id?.startsWith('otaku-') || a.source === 'otakudesu').length;
+          const samehadakuCount = animes.filter((a: any) => a.id?.startsWith('same-') || a.source === 'samehadaku').length;
+          const sokujaCount = animes.filter((a: any) => a.id?.startsWith('sokuja-') || a.source === 'sokuja').length;
+
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({
+            status,
+            totalAnimes: animes.length,
+            totalEpisodes: episodes.length,
+            sourcesCount: {
+              otakudesu: otakudesuCount,
+              samehadaku: samehadakuCount,
+              sokuja: sokujaCount,
+            },
+            logs,
+          }));
+          return;
+        }
+
+        // GET /api/admin/scraper/animes (Admin only)
+        if (req.method === 'GET' && url.pathname === '/api/admin/scraper/animes') {
+          if (!checkIsAdmin(req)) {
+            res.statusCode = 403;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: 'Akses ditolak. Diperlukan hak akses Admin.' }));
+            return;
+          }
+
+          const q = String(url.searchParams.get('q') || '').trim().toLowerCase();
+          const animes = readData(scrapedAnimesFile, []);
+          const episodes = readData(scrapedEpisodesFile, []);
+          let filtered = animes;
+          if (q) {
+            filtered = animes.filter((a: any) =>
+              (a.title && a.title.toLowerCase().includes(q)) ||
+              (a.slug && a.slug.toLowerCase().includes(q)) ||
+              (a.id && a.id.toLowerCase().includes(q))
+            );
+          }
+          const page = parseInt(url.searchParams.get('page') || '1', 10);
+          const pageSize = parseInt(url.searchParams.get('pageSize') || '24', 10);
+          const start = (page - 1) * pageSize;
+          const sliced = filtered.slice(start, start + pageSize);
+
+          const result = sliced.map((a: any) => {
+            const epCount = episodes.filter((e: any) => e.animeId === a.id || e.animeId === a.slug).length;
+            return {
+              id: a.id,
+              title: a.title,
+              slug: a.slug,
+              poster: a.poster || a.banner,
+              episodesCount: epCount || a.episodes || 0,
+              source: a.id?.startsWith('otaku-') ? 'Otakudesu' : a.id?.startsWith('same-') ? 'Samehadaku' : 'Sokuja',
+              updatedAt: a.updatedAt || a.createdAt || 'Terbaru',
+              score: a.score || 0,
+            };
+          });
+
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({
+            total: filtered.length,
+            page,
+            pageSize,
+            animes: result,
+          }));
           return;
         }
 

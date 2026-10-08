@@ -76,7 +76,7 @@ function fetchUrl(url, customHeaders = {}) {
     });
 
     req.on('error', reject);
-    req.setTimeout(12000, () => {
+    req.setTimeout(25000, () => {
       req.destroy();
       reject(new Error(`Timeout fetching ${url}`));
     });
@@ -107,7 +107,7 @@ function postAjax(url, data, referer = '') {
       }
     );
     req.on('error', reject);
-    req.setTimeout(10000, () => {
+    req.setTimeout(15000, () => {
       req.destroy();
       reject(new Error(`Timeout AJAX ${url}`));
     });
@@ -118,20 +118,19 @@ function postAjax(url, data, referer = '') {
 
 async function resolveStreamUrl(streamUrl) {
   if (!streamUrl) return '';
-  if (streamUrl.includes('desustream')) {
-    return streamUrl.replace(/&amp;/g, '&');
-  }
+  const cleanUrl = streamUrl.replace(/&amp;/g, '&');
   try {
-    const res = await fetchUrl(streamUrl, { Referer: 'https://otakudesu.blog/' });
+    const res = await fetchUrl(cleanUrl, { Referer: 'https://otakudesu.blog/' });
     const html = res.body;
-    if (!html) return streamUrl;
+    if (!html) return cleanUrl;
 
     const mp4Match =
       html.match(/const\s+videoURL\s*=\s*["']([^"']+)["']/i) ||
       html.match(/video(?:Player)?\.src\s*=\s*["']([^"']+)["']/i) ||
       html.match(/file\s*:\s*["']([^"']+)["']/i) ||
       html.match(/https?:\/\/[^\s"'<>]+\.odcloud\.net\/[^\s"'<>]+\.mp4/i) ||
-      html.match(/https?:\/\/[^\s"'<>]+\.(?:mp4|m3u8)/i);
+      html.match(/https?:\/\/[^\s"'<>]+\.(?:mp4|m3u8)[^\s"'<>]*/i) ||
+      html.match(/<source[^>]+src=["'](https?:\/\/[^"']+\.mp4[^"']*)["']/i);
     if (mp4Match) return (mp4Match[1] || mp4Match[0]).replace(/&amp;/g, '&');
 
     const bloggerMatch =
@@ -146,7 +145,7 @@ async function resolveStreamUrl(streamUrl) {
   } catch {
     /* ignore */
   }
-  return streamUrl.replace(/&amp;/g, '&');
+  return cleanUrl;
 }
 
 function cleanTitle(t) {
@@ -232,6 +231,9 @@ async function resolveFromSamehadaku(title, epNumber) {
       streamUrl720 = await fetchOption(choice);
     }
 
+    if (streamUrl1080) streamUrl1080 = await resolveStreamUrl(streamUrl1080);
+    if (streamUrl720) streamUrl720 = await resolveStreamUrl(streamUrl720);
+
     const final1080 = streamUrl1080 || streamUrl720;
     const final720 = streamUrl720 || streamUrl1080;
 
@@ -268,6 +270,8 @@ async function resolveFromOtakudesu(title, epNumber) {
       return isSeason2 ? isS2 : !isS2;
     }) || animeLinks[0];
 
+    if (!matchedLink) return null;
+
     const detailUrl = matchedLink[1];
     const detailRes = await fetchUrl(detailUrl);
     const detailHtml = detailRes.body;
@@ -290,12 +294,17 @@ async function resolveFromOtakudesu(title, epNumber) {
     // 1. Direct iframe player on page (fastest & most reliable)
     const directIframeMatch = epHtml.match(/<iframe[^>]+src=["'](https?:\/\/[^"']+)["']/i);
     let directStream = directIframeMatch ? directIframeMatch[1] : null;
+    if (directStream) {
+      directStream = await resolveStreamUrl(directStream);
+    }
 
-    // 2. Fallback to AJAX options if direct iframe not found
+    // 2. Fallback to AJAX options if direct iframe not found or not direct playable
     let streamUrl1080 = directStream;
     let streamUrl720 = directStream;
 
-    if (!directStream) {
+    const isDirect = (url) => url && (url.includes('.mp4') || url.includes('.m3u8') || url.includes('odcloud.net'));
+
+    if (!directStream || !isDirect(directStream)) {
       const allContents = [...epHtml.matchAll(/data-content=["']([^"']+)["']/gi)];
       let dataContent1080 = null;
       let dataContent720 = null;
@@ -329,8 +338,11 @@ async function resolveFromOtakudesu(title, epNumber) {
         return '';
       }
 
-      if (dataContent1080) streamUrl1080 = await resolveOtaku(dataContent1080);
-      if (dataContent720) streamUrl720 = await resolveOtaku(dataContent720);
+      const ajax1080 = dataContent1080 ? await resolveOtaku(dataContent1080) : '';
+      const ajax720 = dataContent720 ? await resolveOtaku(dataContent720) : '';
+
+      if (ajax1080 && isDirect(ajax1080)) streamUrl1080 = ajax1080;
+      if (ajax720 && isDirect(ajax720)) streamUrl720 = ajax720;
     }
 
     const final1080 = streamUrl1080 || streamUrl720;
@@ -496,7 +508,7 @@ async function resolveFromNekopoi(title, epNumber) {
 /**
  * Main function to resolve 1080p & 720p streams for any anime title & episode.
  */
-export async function resolveStreamForEpisode({ animeId, animeTitle, episodeNumber }) {
+export async function resolveStreamForEpisode({ animeId, animeTitle, romaji, episodeNumber }) {
   const epNum = Number(episodeNumber) || 1;
   const cacheKey = `${animeTitle || animeId}:${epNum}`.toLowerCase();
 
@@ -576,32 +588,112 @@ export async function resolveStreamForEpisode({ animeId, animeTitle, episodeNumb
     console.warn('[streamResolver] Database lookup error:', err.message);
   }
 
-  // 3. Live resolution across providers
-  const titleToSearch = animeTitle || animeId;
+  // 3. Live resolution across providers (Prioritize Direct MP4 for Custom Player)
+  const SCRAPED_ANIME_PATH = path.join(process.cwd(), 'database', 'scraped_animes.json');
 
-  // Try Samehadaku (great 1080p & 720p)
-  let result = await resolveFromSamehadaku(titleToSearch, epNum);
-
-  // Try Otakudesu (great 720p & 1080p)
-  if (!result) {
-    result = await resolveFromOtakudesu(titleToSearch, epNum);
+  function getCandidateTitles(qTitle, qId, qRomaji) {
+    const list = [];
+    const seen = new Set();
+    const add = (t) => {
+      if (!t || typeof t !== 'string') return;
+      const clean = t.trim();
+      if (clean.length >= 2 && !seen.has(clean.toLowerCase())) {
+        seen.add(clean.toLowerCase());
+        list.push(clean);
+      }
+    };
+    add(qRomaji);
+    add(qTitle);
+    add(qId);
+    try {
+      if (fs.existsSync(SCRAPED_ANIME_PATH)) {
+        const all = JSON.parse(fs.readFileSync(SCRAPED_ANIME_PATH, 'utf8'));
+        const qClean = cleanTitle(qTitle || qRomaji || qId);
+        for (const a of all) {
+          const aTitles = [a.id, a.slug, a.title, a.titleEnglish, a.titleJapanese, a.titleRomaji].filter(Boolean);
+          const match = (qId && (a.id === qId || a.slug === qId)) ||
+            aTitles.some((t) => {
+              const tc = cleanTitle(t);
+              return tc === qClean || (tc.length >= 6 && qClean.length >= 6 && (tc.includes(qClean) || qClean.includes(tc)));
+            });
+          if (match) {
+            aTitles.forEach((t) => {
+              t.split(/[,/]/).forEach((sub) => add(sub));
+            });
+            break;
+          }
+        }
+      }
+    } catch {}
+    return list;
   }
 
-  // Try Sokuja
-  if (!result) {
-    result = await resolveFromSokuja(titleToSearch, epNum);
+  const candidateTitles = getCandidateTitles(animeTitle, animeId, romaji);
+
+  const isPlayableDirect = (res) => {
+    if (!res || !Array.isArray(res.sources) || res.sources.length === 0) return false;
+    return res.sources.some(
+      (s) => s.url && !isDummyStream(s.url) && !s.url.includes('mega.nz') && (s.url.includes('.mp4') || s.url.includes('.m3u8') || s.url.includes('odcloud.net') || s.url.includes('archive.org') || s.url.includes('sokuja'))
+    );
+  };
+
+  let result = null;
+
+  // Step A: Search for direct MP4 across all candidate titles
+  for (const candTitle of candidateTitles) {
+    // Try Otakudesu (most reliable provider for direct 720p/1080p MP4 streams via odcloud)
+    const otakuRes = await resolveFromOtakudesu(candTitle, epNum);
+    if (isPlayableDirect(otakuRes)) {
+      result = otakuRes;
+      break;
+    }
+
+    // Try Sokuja
+    const sokuRes = await resolveFromSokuja(candTitle, epNum);
+    if (isPlayableDirect(sokuRes)) {
+      result = sokuRes;
+      break;
+    }
+
+    // Try Samehadaku
+    const sameRes = await resolveFromSamehadaku(candTitle, epNum);
+    if (isPlayableDirect(sameRes)) {
+      result = sameRes;
+      break;
+    }
   }
 
-  // Try Nekopoi (Hentai)
+  // Step B: If no direct MP4 found, fall back to any resolved stream
   if (!result) {
-    result = await resolveFromNekopoi(titleToSearch, epNum);
+    for (const candTitle of candidateTitles) {
+      const sameRes = await resolveFromSamehadaku(candTitle, epNum);
+      if (sameRes && sameRes.sources && sameRes.sources.length > 0) {
+        result = sameRes;
+        break;
+      }
+      const otakuRes = await resolveFromOtakudesu(candTitle, epNum);
+      if (otakuRes && otakuRes.sources && otakuRes.sources.length > 0) {
+        result = otakuRes;
+        break;
+      }
+      const sokuRes = await resolveFromSokuja(candTitle, epNum);
+      if (sokuRes && sokuRes.sources && sokuRes.sources.length > 0) {
+        result = sokuRes;
+        break;
+      }
+      const nekoRes = await resolveFromNekopoi(candTitle, epNum);
+      if (nekoRes && nekoRes.sources && nekoRes.sources.length > 0) {
+        result = nekoRes;
+        break;
+      }
+    }
   }
 
   if (result) {
     const finalResult = {
       success: true,
       provider: result.provider,
-      animeTitle: titleToSearch,
+      animeTitle: animeTitle || animeId,
       episodeNumber: epNum,
       sources: result.sources,
     };
@@ -612,7 +704,7 @@ export async function resolveStreamForEpisode({ animeId, animeTitle, episodeNumb
       if (fs.existsSync(SCRAPED_EP_PATH)) {
         const allEps = JSON.parse(fs.readFileSync(SCRAPED_EP_PATH, 'utf8'));
         const existingIdx = allEps.findIndex(
-          (e) => (e.animeId === animeId || cleanTitle(e.title || '').includes(cleanTitle(titleToSearch))) && e.number === epNum
+          (e) => (e.animeId === animeId || cleanTitle(e.title || '').includes(cleanTitle(animeTitle || animeId))) && e.number === epNum
         );
         if (existingIdx !== -1) {
           allEps[existingIdx].sources = result.sources;

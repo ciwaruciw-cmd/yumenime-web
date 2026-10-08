@@ -403,10 +403,10 @@ app.get('/api/scraped/animes', (req, res) => {
 // GET /api/stream/resolve?animeId=...&title=...&ep=...
 app.get('/api/stream/resolve', async (req, res) => {
   try {
-    const { animeId = '', title = '', ep = 1, episode = 1 } = req.query;
+    const { animeId = '', title = '', romaji = '', ep = 1, episode = 1 } = req.query;
     const animeTitle = title || animeId;
     const episodeNumber = Number(ep || episode || 1);
-    const result = await resolveStreamForEpisode({ animeId, animeTitle, episodeNumber });
+    const result = await resolveStreamForEpisode({ animeId, animeTitle, romaji, episodeNumber });
     res.json(result);
   } catch (err) {
     res.status(500).json({ success: false, error: err.message, sources: [] });
@@ -449,7 +449,7 @@ function handleProxyStream(req, res, isDownload = false) {
       const client = target.startsWith('https') ? https : http;
       const headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0',
-        'Referer': target.includes('googlevideo.com') || target.includes('desustream')
+        'Referer': target.includes('googlevideo.com') || target.includes('desustream') || target.includes('odcloud.net')
           ? 'https://desustream.net/'
           : target.includes('sokuja')
             ? 'https://sokuja.uk/'

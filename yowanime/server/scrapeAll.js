@@ -15,6 +15,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_DIR = path.join(__dirname, '../database');
 const EP_JSON = path.join(DB_DIR, 'scraped_episodes.json');
 const ANIME_JSON = path.join(DB_DIR, 'scraped_animes.json');
+const isCatalog = process.argv.includes('--catalog') || process.env.SCRAPE_MODE === 'catalog';
 
 if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
 
@@ -132,11 +133,15 @@ async function scrapeOtakudesu(existingAnimeMap, existingEpSet, isFull = false) 
   const urls = new Set();
 
   const pages = ['https://otakudesu.blog/ongoing-anime/', 'https://otakudesu.blog/'];
-  const maxPages = isFull ? 12 : 3;
+  if (isFull || isCatalog) {
+    // Full A-Z catalog: single page contains ALL 1,891+ anime URLs
+    pages.push('https://otakudesu.blog/anime-list/');
+  }
+  const maxPages = isFull ? 12 : (isCatalog ? 1 : 3);
   for (let p = 2; p <= maxPages; p++) pages.push(`https://otakudesu.blog/ongoing-anime/page/${p}/`);
   if (isFull) {
     for (let p = 1; p <= 15; p++) pages.push(p === 1 ? 'https://otakudesu.blog/complete-anime/' : `https://otakudesu.blog/complete-anime/page/${p}/`);
-  } else {
+  } else if (!isCatalog) {
     pages.push('https://otakudesu.blog/complete-anime/');
   }
 
@@ -152,7 +157,7 @@ async function scrapeOtakudesu(existingAnimeMap, existingEpSet, isFull = false) 
   }
   console.log(`[Otakudesu] Discovered: ${urls.size} anime URLs`);
 
-  await pMap(Array.from(urls), 5, async (detailUrl) => {
+  await pMap(Array.from(urls), isCatalog ? 10 : 5, async (detailUrl) => {
     try {
       const r = await fetchUrl(detailUrl, {}, 12000);
       const h = r.body;
@@ -175,9 +180,9 @@ async function scrapeOtakudesu(existingAnimeMap, existingEpSet, isFull = false) 
       const animeId = `otaku-${slug}`;
       const status = (statusM ? statusM[1].toLowerCase() : '').includes('complete') ? 'completed' : 'ongoing';
 
-      // Smart check: jika sudah tamat dan sudah ada di DB, skip re-scrape episodes
+      // Smart check: skip if already in DB (catalog mode) or completed with episodes
       const existingAnime = existingAnimeMap.get(animeId);
-      if (existingAnime && status === 'completed' && existingAnime.episodes > 0 && !isFull) {
+      if (existingAnime && (isCatalog || (status === 'completed' && existingAnime.episodes > 0 && !isFull))) {
         animes.push(existingAnime);
         return;
       }
@@ -194,8 +199,8 @@ async function scrapeOtakudesu(existingAnimeMap, existingEpSet, isFull = false) 
       const streamAction = actionMs[0] || '';
       const nonceAction = actionMs[1] || '';
 
-      // Filter: hanya episode yang BELUM ada di DB yang di-fetch
-      const epsToFetch = sortedEps.map((e, idx) => ({ ...e, epNum: idx + 1 }))
+      // Filter: hanya episode yang BELUM ada di DB yang di-fetch (skip in catalog mode)
+      const epsToFetch = isCatalog ? [] : sortedEps.map((e, idx) => ({ ...e, epNum: idx + 1 }))
         .filter(e => isFull || !existingEpSet.has(`${animeId}-ep-${e.epNum}`));
 
       if (epsToFetch.length > 0) {
@@ -293,7 +298,10 @@ async function scrapeSamehadaku(existingAnimeMap, existingEpSet, isFull = false)
   const urls = new Set();
 
   const pages = ['https://v2.samehadaku.how/', 'https://v2.samehadaku.how/anime-terbaru/'];
-  const maxPages = isFull ? 10 : 3;
+  if (isFull || isCatalog) {
+    pages.push('https://v2.samehadaku.how/daftar-anime-2/');
+  }
+  const maxPages = isFull ? 10 : (isCatalog ? 1 : 3);
   for (let p = 2; p <= maxPages; p++) pages.push(`https://v2.samehadaku.how/anime-terbaru/page/${p}/`);
   if (isFull) {
     for (let p = 1; p <= 10; p++) pages.push(`https://v2.samehadaku.how/anime-list/page/${p}/`);
@@ -330,7 +338,7 @@ async function scrapeSamehadaku(existingAnimeMap, existingEpSet, isFull = false)
       const animeId = `same-${slug}-sub-indo`;
 
       const existingAnime = existingAnimeMap.get(animeId);
-      if (existingAnime && existingAnime.status === 'completed' && existingAnime.episodes > 0 && !isFull) {
+      if (existingAnime && (isCatalog || (existingAnime.status === 'completed' && existingAnime.episodes > 0 && !isFull))) {
         animes.push(existingAnime);
         return;
       }
@@ -342,7 +350,7 @@ async function scrapeSamehadaku(existingAnimeMap, existingEpSet, isFull = false)
       const synopsis = sinopM ? sinopM[1].replace(/<[^>]+>/g, '').trim() : `${cleanTitle} sub indo.`;
       const score = scoreM ? (parseFloat(scoreM[1]) || 7.5) : (existingAnime?.score || 7.5);
 
-      const epsToFetch = epUrls.map((url, idx) => ({ url, epNum: idx + 1 }))
+      const epsToFetch = isCatalog ? [] : epUrls.map((url, idx) => ({ url, epNum: idx + 1 }))
         .filter(e => isFull || !existingEpSet.has(`${animeId}-ep-${e.epNum}`));
 
       if (epsToFetch.length > 0) {
@@ -417,7 +425,11 @@ async function scrapeSokuja(existingAnimeMap, existingEpSet, isFull = false) {
   const animeUrls = new Set();
 
   const pages = [`${BASE}/`, `${BASE}/anime/?status=ongoing&order=update`];
-  const maxPages = isFull ? 15 : 3;
+  if (isFull || isCatalog) {
+    // Full catalog: scrape ALL 34 pages of Sokuja anime directory (~1,150+ anime)
+    for (let p = 1; p <= 34; p++) pages.push(`${BASE}/anime/?page=${p}`);
+  }
+  const maxPages = isFull ? 15 : (isCatalog ? 1 : 3);
   for (let p = 2; p <= maxPages; p++) pages.push(`${BASE}/anime/?status=ongoing&order=update&page=${p}`);
 
   for (const pUrl of pages) {
@@ -447,7 +459,7 @@ async function scrapeSokuja(existingAnimeMap, existingEpSet, isFull = false) {
       const animeId = `sokuja-${slug}`;
 
       const existingAnime = existingAnimeMap.get(animeId);
-      if (existingAnime && existingAnime.status === 'completed' && existingAnime.episodes > 0 && !isFull) {
+      if (existingAnime && (isCatalog || (existingAnime.status === 'completed' && existingAnime.episodes > 0 && !isFull))) {
         animes.push(existingAnime);
         return;
       }
@@ -468,7 +480,7 @@ async function scrapeSokuja(existingAnimeMap, existingEpSet, isFull = false) {
       const epMs = Array.from(h.matchAll(/href="(\/(?:[^"]*-episode-[^"]+|episode\/[^"]+))"/gi));
       const epUrls = Array.from(new Set(epMs.map(m => `${BASE}${m[1]}`)));
 
-      const epsToFetch = epUrls.map((url) => {
+      const epsToFetch = isCatalog ? [] : epUrls.map((url) => {
         const epNumM = url.match(/episode-(\d+)/i) || url.match(/\/ep[\/\-]?(\d+)/i);
         const epNum = epNumM ? parseInt(epNumM[1]) : 1;
         return { url, epNum };
@@ -548,8 +560,9 @@ async function scrapeSokuja(existingAnimeMap, existingEpSet, isFull = false) {
 // ── MAIN ──────────────────────────────────────────────────────────────────────
 async function main() {
   const isFull = process.argv.includes('--full') || process.env.SCRAPE_MODE === 'full';
+  const mode = isCatalog ? 'MODE CATALOG (SEMUA ANIME, TANPA EPISODE)' : (isFull ? 'MODE FULL' : 'MODE INCREMENTAL');
   console.log('='.repeat(60));
-  console.log(`🚀 YOWANIME SCRAPER — ${isFull ? 'MODE FULL' : 'MODE INCREMENTAL'}...`);
+  console.log(`🚀 YOWANIME SCRAPER — ${mode}...`);
   console.log('='.repeat(60));
 
   let existingAnimes = [], existingEps = [];

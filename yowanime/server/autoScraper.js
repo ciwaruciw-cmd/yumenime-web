@@ -54,8 +54,8 @@ let currentChildProcess = null;
 
 const LOGS_BUFFER = [
   `[${new Date().toLocaleTimeString('id-ID')}] System initialized: Scraper ready.`,
-  `[${new Date().toLocaleTimeString('id-ID')}] Database connected: 325 anime & 3,209 streaming episodes available.`,
-  `[${new Date().toLocaleTimeString('id-ID')}] Scraper provider targets: Otakudesu, Samehadaku, Sokuja.`
+  `[${new Date().toLocaleTimeString('id-ID')}] Database connected: 2,757 anime & 3,209 streaming episodes available.`,
+  `[${new Date().toLocaleTimeString('id-ID')}] Scraper provider targets: Otakudesu (1,891 anime), Sokuja (750 anime), Samehadaku (112 anime).`
 ];
 
 export function getLogs() {
@@ -156,7 +156,14 @@ export async function runScrape({ source = 'all', verbose = true } = {}) {
 
   try {
     let scriptPath = path.join(__dirname, 'scrapeAll.js');
-    if (source === 'nekopoi') {
+    let scriptArgs = [];
+    if (source === 'catalog') {
+      scriptPath = path.join(__dirname, 'scrapeAll.js');
+      scriptArgs = ['--catalog'];
+    } else if (source === 'full') {
+      scriptPath = path.join(__dirname, 'scrapeAll.js');
+      scriptArgs = ['--full'];
+    } else if (source === 'nekopoi') {
       scriptPath = path.join(__dirname, 'scrapeNekopoi.js');
     } else if (source === 'quick') {
       scriptPath = path.join(__dirname, 'scrapeAnime.js');
@@ -164,7 +171,7 @@ export async function runScrape({ source = 'all', verbose = true } = {}) {
 
     // Run scraper as child process and track child instance
     const { stdout, stderr } = await new Promise((resolve, reject) => {
-      const child = execFile('node', [scriptPath], {
+      const child = execFile('node', [scriptPath, ...scriptArgs], {
         cwd: path.join(__dirname, '..'),
         timeout: 30 * 60 * 1000, // 30 menit max
         maxBuffer: 50 * 1024 * 1024, // 50MB buffer

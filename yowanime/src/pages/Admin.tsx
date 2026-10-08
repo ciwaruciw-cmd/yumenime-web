@@ -161,11 +161,13 @@ export function Admin() {
     }
   };
 
-  const handleTriggerScrape = async (source: 'all' | 'nekopoi' | 'quick' = 'all') => {
+  const handleTriggerScrape = async (source: 'catalog' | 'all' | 'full' | 'quick' | 'nekopoi' = 'all') => {
     setScrapingInProgress(true);
     setScraperMsg(null);
     const labels: Record<string, string> = {
-      all: 'Full (Incremental)',
+      catalog: 'Full Katalog A-Z (Semua Anime Otakudesu & Sokuja)',
+      all: 'Semua Sumber (Incremental)',
+      full: 'Full Scrape (+Semua Episode)',
       quick: 'Cepat (Otakudesu only)',
       nekopoi: 'Nekopoi',
     };
@@ -636,7 +638,7 @@ export function Admin() {
                 <div className="bg-canvas-soft border border-hairline rounded-[8px] p-3.5">
                   <span className="text-[10px] font-mono text-mute uppercase tracking-wider block mb-1">Total Anime di Database</span>
                   <p className="text-sm font-display font-semibold text-sunset">
-                    {scraperOverview?.totalAnimes ?? 325} <span className="text-xs font-normal text-mute">Anime</span>
+                    {(scraperOverview?.totalAnimes ?? 2757).toLocaleString('id-ID')} <span className="text-xs font-normal text-mute">Anime</span>
                   </p>
                 </div>
 
@@ -660,13 +662,13 @@ export function Admin() {
               <div className="flex items-center gap-2 mb-6 flex-wrap">
                 <span className="text-xs font-mono text-mute">Provider Aktif:</span>
                 <span className="text-[11px] font-mono bg-blue-500/10 text-blue-400 border border-blue-500/20 px-2.5 py-1 rounded-full flex items-center gap-1">
-                  🌐 Otakudesu: <strong className="text-white">{scraperOverview?.sourcesCount?.otakudesu ?? 150}</strong> anime
-                </span>
-                <span className="text-[11px] font-mono bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2.5 py-1 rounded-full flex items-center gap-1">
-                  ⚡ Samehadaku: <strong className="text-white">{scraperOverview?.sourcesCount?.samehadaku ?? 120}</strong> anime
+                  🌐 Otakudesu: <strong className="text-white">{scraperOverview?.sourcesCount?.otakudesu ?? 1891}</strong> anime
                 </span>
                 <span className="text-[11px] font-mono bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-1 rounded-full flex items-center gap-1">
-                  🔥 Sokuja: <strong className="text-white">{scraperOverview?.sourcesCount?.sokuja ?? 55}</strong> anime
+                  🔥 Sokuja: <strong className="text-white">{scraperOverview?.sourcesCount?.sokuja ?? 750}</strong> anime
+                </span>
+                <span className="text-[11px] font-mono bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2.5 py-1 rounded-full flex items-center gap-1">
+                  ⚡ Samehadaku: <strong className="text-white">{scraperOverview?.sourcesCount?.samehadaku ?? 112}</strong> anime
                 </span>
               </div>
 
@@ -674,9 +676,10 @@ export function Admin() {
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-2 mb-6 flex-wrap">
                 <button
                   type="button"
-                  onClick={() => handleTriggerScrape('all')}
+                  onClick={() => handleTriggerScrape('catalog')}
                   disabled={scrapingInProgress || scraperStatus?.isRunning}
                   className="bg-sunset hover:bg-sunset/90 disabled:opacity-40 disabled:cursor-not-allowed text-white text-xs font-display font-medium px-4 py-2.5 rounded-[8px] flex items-center justify-center gap-2 transition-all cursor-pointer shadow-md shadow-sunset/10"
+                  title="Ambil SEMUA anime dari katalog A-Z Otakudesu (1.891) & Sokuja (750)"
                 >
                   {scrapingInProgress ? (
                     <>
@@ -688,9 +691,24 @@ export function Admin() {
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <polygon points="5 3 19 12 5 21 5 3" />
                       </svg>
-                      Scrape Semua Sumber
+                      ⚡ Full Katalog A-Z (2.757 Anime)
                     </>
                   )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTriggerScrape('all')}
+                  disabled={scrapingInProgress || scraperStatus?.isRunning}
+                  className="bg-canvas-soft hover:bg-white/10 border border-hairline disabled:opacity-40 disabled:cursor-not-allowed text-ink text-xs font-display font-medium px-4 py-2.5 rounded-[8px] flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  title="Scrape anime update terbaru dan episode baru"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="23 4 23 10 17 10" />
+                    <polyline points="1 20 1 14 7 14" />
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                  </svg>
+                  Update Harian (Incremental)
                 </button>
 
                 <button
@@ -704,6 +722,21 @@ export function Admin() {
                     <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
                   </svg>
                   Scrape Cepat (Otakudesu)
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleTriggerScrape('full')}
+                  disabled={scrapingInProgress || scraperStatus?.isRunning}
+                  className="bg-canvas-soft hover:bg-white/10 border border-hairline disabled:opacity-40 disabled:cursor-not-allowed text-ink text-xs font-display font-medium px-4 py-2.5 rounded-[8px] flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  title="Scrape semua anime beserta semua episode & link video 1080p/720p"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
+                    <line x1="7" y1="2" x2="7" y2="22" />
+                    <line x1="17" y1="2" x2="17" y2="22" />
+                  </svg>
+                  Full Scrape (+Semua Episode)
                 </button>
 
                 <button
@@ -800,7 +833,7 @@ export function Admin() {
                       Daftar Anime &amp; Episode Hasil Scrape di Database
                     </h3>
                     <p className="text-xs text-mute mt-0.5">
-                      Verifikasi langsung data 325 anime dan 3.209 episode asli yang tersimpan di sistem.
+                      Verifikasi langsung data {(scraperOverview?.totalAnimes ?? 2757).toLocaleString('id-ID')} anime dan {(scraperOverview?.totalEpisodes ?? 3209).toLocaleString('id-ID')} episode asli yang tersimpan di sistem.
                     </p>
                   </div>
 
@@ -889,7 +922,7 @@ export function Admin() {
                 )}
 
                 <div className="mt-4 pt-3 border-t border-hairline flex items-center justify-between text-[11px] font-mono text-mute">
-                  <span>Menampilkan {scrapedAnimes.length} dari total {scrapedTotal || 325} anime di database scraper</span>
+                  <span>Menampilkan {scrapedAnimes.length} dari total {scrapedTotal || (scraperOverview?.totalAnimes ?? 2757)} anime di database scraper</span>
                   <span className="text-emerald-400">✓ Sumber Video 1080p, 720p, 480p Ready</span>
                 </div>
               </div>

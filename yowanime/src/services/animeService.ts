@@ -245,10 +245,21 @@ function slugScore(query: string, candidate: string): number {
 /**
  * Resolve real-time 1080p and 720p stream from web scraper sources
  */
-export async function resolveEpisodeStream(animeTitle: string, episodeNumber: number): Promise<VideoSource[]> {
-  if (!animeTitle) return [];
+export async function resolveEpisodeStream(
+  animeTitle: string,
+  episodeNumber: number,
+  titleRomaji?: string,
+  animeId?: string
+): Promise<VideoSource[]> {
+  if (!animeTitle && !titleRomaji && !animeId) return [];
   try {
-    const res = await fetch(`/api/stream/resolve?title=${encodeURIComponent(animeTitle)}&ep=${episodeNumber}`);
+    const params = new URLSearchParams({
+      title: animeTitle || '',
+      romaji: titleRomaji || '',
+      ep: String(episodeNumber),
+      animeId: animeId || '',
+    });
+    const res = await fetch(`/api/stream/resolve?${params.toString()}`);
     if (res.ok) {
       const data = await res.json();
       if (data.success && Array.isArray(data.sources) && data.sources.length > 0) {

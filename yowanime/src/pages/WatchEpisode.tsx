@@ -76,7 +76,12 @@ export default function WatchEpisode() {
     // Sources empty or all dummy — resolve live
     setIsResolvingStream(true);
     let isMounted = true;
-    resolveEpisodeStream(anime.title, currentEpisode.number).then((sources) => {
+    resolveEpisodeStream(
+      anime.title,
+      currentEpisode.number,
+      anime.titleRomaji || anime.titleJapanese,
+      anime.id || anime.slug
+    ).then((sources) => {
       if (!isMounted) return;
       setIsResolvingStream(false);
       if (sources && sources.length > 0) {
