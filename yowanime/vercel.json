@@ -1,14 +1,14 @@
 {
   "version": 2,
   "functions": {
-    "server/index.js": {
+    "api/index.js": {
       "includeFiles": "database/**"
     }
   },
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/server/index.js"
+      "source": "/api/:match*",
+      "destination": "/api"
     }
   ]
 }

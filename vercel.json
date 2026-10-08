@@ -1,14 +1,14 @@
 {
   "version": 2,
   "functions": {
-    "yowanime/server/index.js": {
+    "api/index.js": {
       "includeFiles": "yowanime/database/**"
     }
   },
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/yowanime/server/index.js"
+      "source": "/api/:match*",
+      "destination": "/api"
     }
   ]
 }
