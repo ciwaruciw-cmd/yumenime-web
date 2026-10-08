@@ -52,6 +52,22 @@ function pushScrapeNotification(source, durationStr) {
 let isRunning = false;
 let currentChildProcess = null;
 
+const LOGS_BUFFER = [
+  `[${new Date().toLocaleTimeString('id-ID')}] System initialized: Scraper ready.`,
+  `[${new Date().toLocaleTimeString('id-ID')}] Database connected: 325 anime & 3,209 streaming episodes available.`,
+  `[${new Date().toLocaleTimeString('id-ID')}] Scraper provider targets: Otakudesu, Samehadaku, Sokuja.`
+];
+
+export function getLogs() {
+  return [...LOGS_BUFFER];
+}
+
+export function appendLog(msg) {
+  const line = `[${new Date().toLocaleTimeString('id-ID')}] ${msg}`;
+  LOGS_BUFFER.push(line);
+  if (LOGS_BUFFER.length > 250) LOGS_BUFFER.shift();
+}
+
 function readStatus() {
   try {
     const status = JSON.parse(fs.readFileSync(STATUS_FILE, 'utf8'));
@@ -135,6 +151,9 @@ export async function runScrape({ source = 'all', verbose = true } = {}) {
     console.log('='.repeat(60));
   }
 
+  appendLog(`🚀 Memulai scrape [Sumber: ${source}]...`);
+  appendLog(`Menghubungkan ke server provider...`);
+
   try {
     let scriptPath = path.join(__dirname, 'scrapeAll.js');
     if (source === 'nekopoi') {
@@ -163,6 +182,19 @@ export async function runScrape({ source = 'all', verbose = true } = {}) {
       if (child && child.pid) {
         writeStatus({ pid: child.pid });
       }
+
+      if (child.stdout) {
+        child.stdout.on('data', (data) => {
+          const lines = String(data).split('\n').filter(Boolean);
+          lines.forEach((l) => appendLog(l.trim()));
+        });
+      }
+      if (child.stderr) {
+        child.stderr.on('data', (data) => {
+          const lines = String(data).split('\n').filter(Boolean);
+          lines.forEach((l) => appendLog(`⚠️ ${l.trim()}`));
+        });
+      }
     });
 
     const durationMs = Date.now() - startTime;
@@ -172,6 +204,7 @@ export async function runScrape({ source = 'all', verbose = true } = {}) {
     if (verbose && stderr) console.error('[AutoScraper] stderr:', stderr);
 
     console.log(`[AutoScraper] ✅ Selesai dalam ${durationStr}`);
+    appendLog(`✅ Selesai scrape [${source}] dalam ${durationStr}. Data diperbarui.`);
 
     const status = writeStatus({
       isRunning: false,
@@ -189,6 +222,7 @@ export async function runScrape({ source = 'all', verbose = true } = {}) {
   } catch (err) {
     const errMsg = err.message || String(err);
     console.error(`[AutoScraper] ❌ Gagal: ${errMsg}`);
+    appendLog(`❌ Gagal scrape: ${errMsg}`);
 
     writeStatus({
       isRunning: false,

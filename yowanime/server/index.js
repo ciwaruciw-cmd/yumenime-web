@@ -15,7 +15,7 @@ import https from 'https';
 import http from 'http';
 import { fileURLToPath } from 'url';
 import { resolveStreamForEpisode } from './streamResolver.js';
-import { runScrape, startScheduler, getStatus as getScrapeStatus, resetStatus as resetScrapeStatus } from './autoScraper.js';
+import { runScrape, startScheduler, getStatus as getScrapeStatus, resetStatus as resetScrapeStatus, getLogs, appendLog } from './autoScraper.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -998,6 +998,84 @@ app.delete('/api/notifications', authenticateToken, requireAdmin, async (req, re
  */
 app.get('/api/admin/scraper/status', authenticateToken, requireAdmin, (_req, res) => {
   res.json(getScrapeStatus());
+});
+
+/**
+ * GET /api/admin/scraper/overview
+ * Kembalikan ringkasan data anime & episode yang sudah di-scrape, breakdown sumber, dan log
+ */
+app.get('/api/admin/scraper/overview', authenticateToken, requireAdmin, (_req, res) => {
+  const animes = getScrapedAnimes();
+  const episodes = getScrapedEpisodes();
+  const status = getScrapeStatus();
+  const logs = getLogs ? getLogs() : [];
+
+  const otakudesuCount = animes.filter(a => a.id.startsWith('otaku-') || a.source === 'otakudesu').length;
+  const samehadakuCount = animes.filter(a => a.id.startsWith('same-') || a.source === 'samehadaku').length;
+  const sokujaCount = animes.filter(a => a.id.startsWith('sokuja-') || a.source === 'sokuja').length;
+
+  res.json({
+    status,
+    totalAnimes: animes.length,
+    totalEpisodes: episodes.length,
+    sourcesCount: {
+      otakudesu: otakudesuCount,
+      samehadaku: samehadakuCount,
+      sokuja: sokujaCount,
+    },
+    logs,
+  });
+});
+
+/**
+ * GET /api/admin/scraper/animes
+ * List & search daftar anime yang sudah di-scrape di database
+ */
+app.get('/api/admin/scraper/animes', authenticateToken, requireAdmin, (req, res) => {
+  const q = String(req.query.q || '').trim().toLowerCase();
+  const animes = getScrapedAnimes();
+  const episodes = getScrapedEpisodes();
+  let filtered = animes;
+  if (q) {
+    filtered = animes.filter(a =>
+      (a.title && a.title.toLowerCase().includes(q)) ||
+      (a.slug && a.slug.toLowerCase().includes(q)) ||
+      (a.id && a.id.toLowerCase().includes(q))
+    );
+  }
+  const page = parseInt(req.query.page || '1', 10);
+  const pageSize = parseInt(req.query.pageSize || '20', 10);
+  const start = (page - 1) * pageSize;
+  const sliced = filtered.slice(start, start + pageSize);
+
+  const result = sliced.map(a => {
+    const epCount = episodes.filter(e => e.animeId === a.id || e.animeId === a.slug).length;
+    return {
+      id: a.id,
+      title: a.title,
+      slug: a.slug,
+      poster: a.poster || a.thumbnail,
+      episodesCount: epCount,
+      source: a.id.startsWith('otaku-') ? 'Otakudesu' : a.id.startsWith('same-') ? 'Samehadaku' : 'Sokuja',
+      updatedAt: a.updatedAt || a.created_at || 'Terbaru',
+      score: a.score || 0,
+    };
+  });
+
+  res.json({
+    total: filtered.length,
+    page,
+    pageSize,
+    animes: result,
+  });
+});
+
+/**
+ * GET /api/admin/scraper/logs
+ * Ambil live log scraper
+ */
+app.get('/api/admin/scraper/logs', authenticateToken, requireAdmin, (_req, res) => {
+  res.json(getLogs ? getLogs() : []);
 });
 
 /**
