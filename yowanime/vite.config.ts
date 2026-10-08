@@ -16,6 +16,7 @@ const DEFAULT_ADMIN_EMAILS = [
   'omgnaoiyui@gmail.com',
   'yowa@gmail.com',
   'yowayichis@gmail.com',
+  'ciwaruciw@gmail.com',
 ];
 
 const JWT_SECRET = process.env.JWT_SECRET || 'yowanime-jwt-secret-key-2026-production';

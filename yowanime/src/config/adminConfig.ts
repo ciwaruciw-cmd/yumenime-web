@@ -9,6 +9,7 @@ export const DEFAULT_ADMIN_EMAILS: string[] = [
   'omgnaoiyui@gmail.com',
   'yowa@gmail.com',
   'yowayichis@gmail.com',
+  'ciwaruciw@gmail.com',
 ];
 
 const STORAGE_KEY = 'yowanime_admin_emails';

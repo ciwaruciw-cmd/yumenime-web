@@ -103,6 +103,13 @@ const pool = new Pool({
 app.use(cors());
 app.use(express.json());
 
+const DEFAULT_ADMIN_EMAILS = [
+  'omgnaoiyui@gmail.com',
+  'yowa@gmail.com',
+  'yowayichis@gmail.com',
+  'ciwaruciw@gmail.com',
+];
+
 // Auto-initialize PostgreSQL tables if database is fresh (e.g. on Neon)
 let dbInitialized = false;
 async function ensureDbInitialized() {
@@ -118,6 +125,10 @@ async function ensureDbInitialized() {
         console.log('[DB] Successfully applied schema.sql!');
       }
     }
+    // Ensure all predefined admin emails have admin role in PostgreSQL
+    await pool.query("UPDATE users SET role = 'admin' WHERE LOWER(email) = ANY($1)", [
+      DEFAULT_ADMIN_EMAILS.map((e) => e.toLowerCase()),
+    ]).catch(() => {});
     dbInitialized = true;
   } catch (err) {
     console.warn('[DB] Auto-migration check warning:', err.message);
@@ -569,13 +580,15 @@ app.post('/api/auth/register', async (req, res) => {
 
     // Hash password with bcrypt salt rounds 10
     const passwordHash = await bcrypt.hash(password, 10);
+    const isDefaultAdmin = DEFAULT_ADMIN_EMAILS.some((e) => e.toLowerCase() === cleanEmail);
+    const initialRole = isDefaultAdmin ? 'admin' : 'user';
 
     // Insert user into PostgreSQL database
     const newUser = await pool.query(
       `INSERT INTO users (username, email, password_hash, avatar_url, role)
-       VALUES ($1, $2, $3, $4, 'user')
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING id, username, email, avatar_url, role, created_at`,
-      [cleanUsername, cleanEmail, passwordHash, `https://picsum.photos/seed/${cleanUsername}/80/80`]
+      [cleanUsername, cleanEmail, passwordHash, `https://picsum.photos/seed/${cleanUsername}/80/80`, initialRole]
     );
 
     const user = newUser.rows[0];
@@ -631,6 +644,13 @@ app.post('/api/auth/login', async (req, res) => {
 
     if (!isMatch) {
       return res.status(401).json({ error: 'Email atau password salah.' });
+    }
+
+    // Auto-promote default admins
+    const isDefaultAdmin = DEFAULT_ADMIN_EMAILS.some((e) => e.toLowerCase() === cleanEmail);
+    if (isDefaultAdmin && user.role !== 'admin') {
+      user.role = 'admin';
+      await pool.query("UPDATE users SET role = 'admin' WHERE id = $1", [user.id]).catch(() => {});
     }
 
     // Generate cryptographic signed JWT
@@ -763,7 +783,9 @@ app.delete('/api/comments/:commentId', authenticateToken, async (req, res) => {
 app.get('/api/admin/emails', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const result = await pool.query("SELECT email FROM users WHERE role = 'admin' ORDER BY created_at ASC");
-    res.json(result.rows.map(r => r.email));
+    const dbEmails = result.rows.map(r => r.email);
+    const combined = [...new Set([...DEFAULT_ADMIN_EMAILS, ...dbEmails])];
+    res.json(combined);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
