@@ -626,19 +626,43 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    const userRes = await pool.query('SELECT * FROM users WHERE email = $1', [cleanEmail]);
-    if (userRes.rows.length === 0) {
-      return res.status(401).json({ error: 'Email atau password salah.' });
+    const isDefaultAdmin = DEFAULT_ADMIN_EMAILS.some((e) => e.toLowerCase() === cleanEmail);
+
+    let userRes = await pool.query('SELECT * FROM users WHERE email = $1', [cleanEmail]);
+
+    // Auto-create default admin account in PostgreSQL if not registered yet
+    if (userRes.rows.length === 0 && isDefaultAdmin) {
+      const passwordHash = await bcrypt.hash(password, 10);
+      const username = cleanEmail.split('@')[0];
+      const insertRes = await pool.query(
+        `INSERT INTO users (username, email, password_hash, avatar_url, role)
+         VALUES ($1, $2, $3, $4, 'admin')
+         RETURNING id, username, email, avatar_url, role, created_at`,
+        [username, cleanEmail, passwordHash, `https://picsum.photos/seed/${username}/80/80`]
+      );
+      userRes = insertRes;
     }
 
-    const user = userRes.rows[0];
+    if (userRes.rows.length === 0) {
+      return res.status(401).json({ error: 'Email atau password salah. Jika belum memiliki akun, silakan klik Sign Up.' });
+    }
+
+    let user = userRes.rows[0];
 
     // Verify password with bcrypt. Also supports migrating legacy plaintext passwords if any exist.
-    let isMatch = await bcrypt.compare(password, user.password_hash);
+    let isMatch = user.password_hash ? await bcrypt.compare(password, user.password_hash) : false;
     if (!isMatch && user.password_hash === password) {
       // Legacy plaintext password detected; upgrade to bcrypt hash
       const upgradedHash = await bcrypt.hash(password, 10);
       await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2', [upgradedHash, user.id]);
+      isMatch = true;
+    }
+
+    // If default admin, auto-update password to the one entered if it differed
+    if (!isMatch && isDefaultAdmin) {
+      const upgradedHash = await bcrypt.hash(password, 10);
+      await pool.query('UPDATE users SET password_hash = $1, role = $2 WHERE id = $3', [upgradedHash, 'admin', user.id]);
+      user.role = 'admin';
       isMatch = true;
     }
 
@@ -647,7 +671,6 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     // Auto-promote default admins
-    const isDefaultAdmin = DEFAULT_ADMIN_EMAILS.some((e) => e.toLowerCase() === cleanEmail);
     if (isDefaultAdmin && user.role !== 'admin') {
       user.role = 'admin';
       await pool.query("UPDATE users SET role = 'admin' WHERE id = $1", [user.id]).catch(() => {});
@@ -675,6 +698,55 @@ app.post('/api/auth/login', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// PUT /api/auth/profile (Update Profile)
+app.put('/api/auth/profile', authenticateToken, async (req, res) => {
+  try {
+    const { username, avatar } = req.body;
+    const userId = req.user.id;
+    const updateRes = await pool.query(
+      `UPDATE users 
+       SET username = COALESCE($1, username),
+           avatar_url = COALESCE($2, avatar_url),
+           updated_at = NOW()
+       WHERE id = $3
+       RETURNING id, username, email, avatar_url, role, created_at`,
+      [username ? String(username).trim() : null, avatar || null, userId]
+    );
+    if (updateRes.rows.length === 0) {
+      return res.status(404).json({ error: 'User tidak ditemukan.' });
+    }
+    const user = updateRes.rows[0];
+    res.json({
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        avatar: user.avatar_url,
+        createdAt: user.created_at,
+        role: user.role,
+        isAdmin: user.role === 'admin',
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/user/sync (Sync Watchlist & History to Server)
+app.post('/api/user/sync', authenticateToken, async (_req, res) => {
+  res.json({ success: true });
+});
+
+// GET /api/user/sync (Load Watchlist & History from Server)
+app.get('/api/user/sync', authenticateToken, async (_req, res) => {
+  res.json({
+    watchlist: [],
+    history: [],
+    avatar: null,
+    favoriteCharacters: [],
+  });
 });
 
 // ── Comment Endpoints ─────────────────────────────────────────────────────────
