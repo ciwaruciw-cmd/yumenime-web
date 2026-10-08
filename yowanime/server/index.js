@@ -19,12 +19,24 @@ import { runScrape, startScheduler, getStatus as getScrapeStatus, resetStatus as
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const NOTIF_FILE = path.join(__dirname, '../database/notifications.json');
+
+function getDbPath(filename) {
+  const candidates = [
+    path.join(__dirname, '../database', filename),
+    path.join(process.cwd(), 'database', filename),
+    path.join(process.cwd(), 'yowanime/database', filename),
+    path.join(__dirname, filename),
+  ];
+  return candidates.find((c) => fs.existsSync(c)) || candidates[0];
+}
+
+const NOTIF_FILE = getDbPath('notifications.json');
 
 function readLocalNotifs() {
   try {
-    if (fs.existsSync(NOTIF_FILE)) {
-      return JSON.parse(fs.readFileSync(NOTIF_FILE, 'utf8'));
+    const f = getDbPath('notifications.json');
+    if (fs.existsSync(f)) {
+      return JSON.parse(fs.readFileSync(f, 'utf8'));
     }
   } catch {}
   return [];
@@ -32,10 +44,47 @@ function readLocalNotifs() {
 
 function writeLocalNotifs(notifs) {
   try {
-    fs.writeFileSync(NOTIF_FILE, JSON.stringify(notifs, null, 2), 'utf8');
+    const f = getDbPath('notifications.json');
+    fs.writeFileSync(f, JSON.stringify(notifs, null, 2), 'utf8');
   } catch (err) {
     console.warn('Failed to write local notifs:', err);
   }
+}
+
+let _scrapedEpsCache = null;
+function getScrapedEpisodes() {
+  if (!_scrapedEpsCache) {
+    const p = getDbPath('scraped_episodes.json');
+    if (fs.existsSync(p)) {
+      try {
+        _scrapedEpsCache = JSON.parse(fs.readFileSync(p, 'utf8'));
+      } catch (e) {
+        console.error('Failed to parse scraped_episodes.json:', e);
+        _scrapedEpsCache = [];
+      }
+    } else {
+      _scrapedEpsCache = [];
+    }
+  }
+  return _scrapedEpsCache;
+}
+
+let _scrapedAnimesCache = null;
+function getScrapedAnimes() {
+  if (!_scrapedAnimesCache) {
+    const p = getDbPath('scraped_animes.json');
+    if (fs.existsSync(p)) {
+      try {
+        _scrapedAnimesCache = JSON.parse(fs.readFileSync(p, 'utf8'));
+      } catch (e) {
+        console.error('Failed to parse scraped_animes.json:', e);
+        _scrapedAnimesCache = [];
+      }
+    } else {
+      _scrapedAnimesCache = [];
+    }
+  }
+  return _scrapedAnimesCache;
 }
 
 dotenv.config();
@@ -53,6 +102,34 @@ const pool = new Pool({
 
 app.use(cors());
 app.use(express.json());
+
+// Auto-initialize PostgreSQL tables if database is fresh (e.g. on Neon)
+let dbInitialized = false;
+async function ensureDbInitialized() {
+  if (dbInitialized) return;
+  try {
+    const check = await pool.query("SELECT to_regclass('public.users') AS exists");
+    if (!check.rows[0]?.exists) {
+      console.log('[DB] Fresh database detected. Applying schema.sql...');
+      const schemaFile = getDbPath('schema.sql');
+      if (fs.existsSync(schemaFile)) {
+        const sql = fs.readFileSync(schemaFile, 'utf8');
+        await pool.query(sql);
+        console.log('[DB] Successfully applied schema.sql!');
+      }
+    }
+    dbInitialized = true;
+  } catch (err) {
+    console.warn('[DB] Auto-migration check warning:', err.message);
+  }
+}
+
+app.use(async (_req, _res, next) => {
+  if (!dbInitialized) {
+    ensureDbInitialized().catch(() => {});
+  }
+  next();
+});
 
 // ── Authentication & Authorization Middlewares ───────────────────────────────
 
@@ -265,6 +342,48 @@ app.get('/api/genres', async (req, res) => {
   try {
     const result = await pool.query('SELECT name FROM genres ORDER BY name ASC');
     res.json(result.rows.map(r => r.name));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Scraped Episodes Database API ─────────────────────────────────
+// GET /api/scraped/episodes?animeId=&slug=
+app.get('/api/scraped/episodes', (req, res) => {
+  try {
+    const animeId = req.query.animeId || '';
+    const slug = req.query.slug || '';
+    const all = getScrapedEpisodes();
+    let result = all;
+    if (animeId || slug) {
+      result = all.filter(
+        (e) => e.animeId === animeId || e.animeId === slug
+      );
+    }
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/scraped/animes?slug=&title=
+app.get('/api/scraped/animes', (req, res) => {
+  try {
+    const slug = req.query.slug || '';
+    const title = req.query.title || '';
+    const all = getScrapedAnimes();
+    let result = all;
+    if (slug || title) {
+      const q = String(slug || title).toLowerCase();
+      result = all.filter(
+        (a) =>
+          a.slug === slug ||
+          a.id === slug ||
+          (a.title && a.title.toLowerCase().includes(q)) ||
+          (a.slug && a.slug.includes(q))
+      );
+    }
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

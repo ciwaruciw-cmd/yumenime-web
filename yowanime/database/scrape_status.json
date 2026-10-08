@@ -5,7 +5,7 @@
   "totalRuns": 23,
   "totalSuccess": 21,
   "isRunning": false,
-  "nextScheduled": null,
+  "nextScheduled": "2026-10-08T11:39:10.749Z",
   "lastDuration": "45s",
   "pid": null
 }

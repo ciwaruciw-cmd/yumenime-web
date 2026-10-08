@@ -15,7 +15,12 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const SCRAPED_EP_PATH = path.join(__dirname, '../database/scraped_episodes.json');
+const SCRAPED_EP_PATH = [
+  path.join(__dirname, '../database/scraped_episodes.json'),
+  path.join(process.cwd(), 'database/scraped_episodes.json'),
+  path.join(process.cwd(), 'yowanime/database/scraped_episodes.json'),
+  path.join(__dirname, 'scraped_episodes.json'),
+].find((p) => fs.existsSync(p)) || path.join(__dirname, '../database/scraped_episodes.json');
 
 // In-memory cache for fast stream lookups
 const streamMemoryCache = new Map();
