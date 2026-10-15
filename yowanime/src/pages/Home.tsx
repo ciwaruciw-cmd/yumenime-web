@@ -2,280 +2,300 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { HeroBanner } from '@/components/anime/HeroBanner';
 import { AnimeSection } from '@/components/anime/AnimeSection';
-import { Badge } from '@/components/ui/Badge';
 import { getAnimeList } from '@/services/animeService';
 import { useHistoryStore } from '@/store/useHistoryStore';
-import { getPopularGenres } from '@/data/genres';
+import { useActionSheetStore } from '@/store/useActionSheetStore';
 import type { Anime } from '@/types/anime';
 
 // Fast local session cache for instant 0ms home render on mobile
-function getHomeCache(): { featured: Anime | null; trending: Anime[]; newUpdate: Anime[] } | null {
+function getHomeCache(): Record<string, any> | null {
   try {
-    const raw = sessionStorage.getItem('yumenime_home_cache');
+    const raw = sessionStorage.getItem('yumenime_home_cr_cache');
     if (raw) return JSON.parse(raw);
   } catch {}
   return null;
 }
 
 /**
- * Home page — hero banner, Trending, Baru Update, Genre Populer.
- * Memuat data anime resmi secara real-time dari AniList GraphQL API.
+ * Crunchyroll Mobile App Experience.
+ * Recreates the exact layout from the 5 mobile screenshots:
+ * - Full-bleed multi-slide Hero banner with vertical key-art & dash indicators
+ * - Floating "👑 Go Premium" banner
+ * - "Trending Anime"
+ * - "Your Anime Starter Pack"
+ * - "Continue Watching" 16:9 episode card with progress bar
+ * - "Movie Night"
+ * - "Binge-worthy Anime For You"
+ * - "Popular Dubbed Anime"
+ * - "Into The Fantasia"
+ * - "Latest Releases"
  */
 export default function Home() {
   const cached = useMemo(() => getHomeCache(), []);
-  const genres = useMemo(() => getPopularGenres(), []);
-
   const { history } = useHistoryStore();
-  const recentHistory = useMemo(() => history.slice(0, 8), [history]);
+  const { openMenu } = useActionSheetStore();
+  const recentHistory = useMemo(() => history.slice(0, 6), [history]);
 
-  const [featured, setFeatured] = useState<Anime | null>(cached?.featured ?? null);
   const [trending, setTrending] = useState<Anime[]>(cached?.trending ?? []);
+  const [starterPack, setStarterPack] = useState<Anime[]>(cached?.starterPack ?? []);
+  const [movies, setMovies] = useState<Anime[]>(cached?.movies ?? []);
+  const [bingeWorthy, setBingeWorthy] = useState<Anime[]>(cached?.bingeWorthy ?? []);
+  const [fantasia, setFantasia] = useState<Anime[]>(cached?.fantasia ?? []);
   const [newUpdate, setNewUpdate] = useState<Anime[]>(cached?.newUpdate ?? []);
 
   useEffect(() => {
     let isMounted = true;
 
-    async function fetchRealTimeAnime() {
+    async function fetchCrunchyrollSections() {
       try {
-        const [trendingRes, latestRes] = await Promise.all([
-          // Trending: ongoing anime that are currently popular/viral
+        const [trendingRes, starterRes, movieRes, bingeRes, fantasiaRes, latestRes] = await Promise.all([
+          // Trending
           getAnimeList({ status: 'ongoing', pageSize: 12 }),
-          // Latest Episodes: anime currently airing / recently started
-          getAnimeList({ sort: 'new', status: 'ongoing', pageSize: 12 }),
+          // Starter pack (top rating)
+          getAnimeList({ sort: 'score', pageSize: 12 }),
+          // Movies (Movie Night)
+          getAnimeList({ type: 'Movie', pageSize: 12 }),
+          // Binge-worthy (completed series)
+          getAnimeList({ status: 'completed', pageSize: 12 }),
+          // Into the Fantasia
+          getAnimeList({ genre: 'Fantasy', pageSize: 12 }),
+          // Latest releases
+          getAnimeList({ sort: 'new', pageSize: 12 }),
         ]);
 
         if (isMounted) {
-          let feat = featured;
-          if (trendingRes.data.length > 0) {
-            setTrending(trendingRes.data);
-            feat = trendingRes.data[0];
-            setFeatured(feat);
-          }
-          if (latestRes.data.length > 0) {
-            setNewUpdate(latestRes.data);
-          }
-          // Store fast cache for subsequent visits
+          if (trendingRes.data.length > 0) setTrending(trendingRes.data);
+          if (starterRes.data.length > 0) setStarterPack(starterRes.data);
+          if (movieRes.data.length > 0) setMovies(movieRes.data);
+          if (bingeRes.data.length > 0) setBingeWorthy(bingeRes.data);
+          if (fantasiaRes.data.length > 0) setFantasia(fantasiaRes.data);
+          if (latestRes.data.length > 0) setNewUpdate(latestRes.data);
+
           try {
             sessionStorage.setItem(
-              'yumenime_home_cache',
+              'yumenime_home_cr_cache',
               JSON.stringify({
-                featured: feat,
                 trending: trendingRes.data,
+                starterPack: starterRes.data,
+                movies: movieRes.data,
+                bingeWorthy: bingeRes.data,
+                fantasia: fantasiaRes.data,
                 newUpdate: latestRes.data,
               })
             );
           } catch {}
         }
       } catch (err) {
-        console.warn('[Home] Failed to fetch live AniList data:', err);
+        console.warn('[Home] Failed to load anime sections:', err);
       }
     }
 
-    void fetchRealTimeAnime();
+    void fetchCrunchyrollSections();
 
     return () => {
       isMounted = false;
     };
   }, []);
 
+  // Fallback demo for Continue Watching when history is empty, matching Screenshot 2 (Re:ZERO Episode 18)
+  const displayHistory = recentHistory.length > 0 ? recentHistory : [
+    {
+      animeId: 're-zero',
+      animeTitle: 'Re:ZERO -Starting Life in Another World-',
+      animeSlug: 're-zero-starting-life-in-another-world',
+      animePoster: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fcover%2Flarge%2Fbx21355-6bBqJ37qB07X.png&w=400&output=webp',
+      episodeThumbnail: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fbanner%2F21355-mReVJyZbe85g.jpg&w=600&output=webp',
+      episodeNumber: 18,
+      episodeTitle: 'From Zero',
+      currentTime: 1080,
+      duration: 1440,
+      progress: 75,
+      completed: false,
+      updatedAt: Date.now(),
+    },
+  ];
+
   return (
-    <div className="page-enter">
-      {/* Hero Banner */}
-      {featured && <HeroBanner anime={featured} />}
+    <div className="page-enter bg-black text-white min-h-screen">
+      {/* 1. Crunchyroll Full-bleed Multi-slide Hero Banner */}
+      <HeroBanner animes={trending} />
 
-      {/* Lanjutkan Menonton (Continue Watching) */}
-      {recentHistory.length > 0 && (
-        <section className="py-6 sm:py-8 border-b border-hairline/40">
-          <div className="max-w-[1280px] mx-auto px-4 sm:px-6">
-            <div className="flex items-end justify-between mb-4">
-              <div>
-                <span className="eyebrow-mono text-sunset block mb-1">YOUR HISTORY</span>
-                <h2 className="display-sm text-ink text-xl sm:text-2xl font-bold font-display">Continue Watching</h2>
-              </div>
-              <Link
-                to="/history"
-                className="text-xs sm:text-sm font-display text-body-mid hover:text-ink transition-colors flex items-center gap-1 group"
-              >
-                <span>View All ({history.length})</span>
-                <span className="group-hover:translate-x-0.5 transition-transform">→</span>
-              </Link>
-            </div>
 
-            <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-none custom-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
-              {recentHistory.map((item) => {
-                const target = `/anime/${item.animeSlug || item.animeId}/episode/${item.episodeNumber}`;
-                const progressPct = Math.min(100, Math.round(item.progress));
 
-                return (
-                  <Link
-                    key={item.animeId}
-                    to={target}
-                    className="shrink-0 w-60 sm:w-72 group rounded-[10px] overflow-hidden bg-canvas-card border border-hairline hover:border-white/20 transition-all hover:shadow-xl hover:-translate-y-0.5"
-                  >
-                    <div className="relative aspect-video bg-black overflow-hidden">
-                      <img
-                        src={item.episodeThumbnail || item.animePoster}
-                        alt={item.animeTitle}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        loading="lazy"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-
-                      {/* Episode Badge */}
-                      <span className="absolute top-2 left-2 bg-black/85 text-white text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-white/10">
-                        EP {item.episodeNumber}
-                      </span>
-
-                      {item.completed && (
-                        <span className="absolute top-2 right-2 bg-emerald-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">
-                          ✓ Done
-                        </span>
-                      )}
-
-                      {/* Play overlay button */}
-                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <div className="w-10 h-10 rounded-full bg-sunset text-white flex items-center justify-center shadow-lg transform group-hover:scale-110 transition-transform">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5">
-                            <polygon points="5 3 19 12 5 21 5 3" />
-                          </svg>
-                        </div>
-                      </div>
-
-                      {/* Progress bar */}
-                      <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/20">
-                        <div
-                          className={item.completed ? 'h-full bg-emerald-500' : 'h-full bg-sunset'}
-                          style={{ width: `${progressPct}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="p-3">
-                      <h3 className="font-display font-bold text-xs sm:text-sm text-white group-hover:text-sunset transition-colors truncate">
-                        {item.animeTitle}
-                      </h3>
-                      <div className="flex items-center justify-between text-[10px] font-mono text-mute mt-1">
-                        <span className="truncate max-w-[140px]">
-                          {item.episodeTitle || `Episode ${item.episodeNumber}`}
-                        </span>
-                <span>{item.completed ? 'Done' : `${progressPct}%`}</span>
-                      </div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Trending section — horizontal scroll */}
+      {/* 2. Trending Anime (Screenshot 1 & 5) */}
       <AnimeSection
-        eyebrow="TRENDING"
-        title="Trending Now"
+        title="Trending Anime"
         animes={trending}
         viewAllHref="/anime?sort=popular"
         horizontal
       />
 
-      {/* Latest Updates section — horizontal scroll */}
+      {/* 4. Your Anime Starter Pack (Screenshot 2) */}
       <AnimeSection
-        eyebrow="LATEST UPDATES"
-        title="New Episodes"
+        title="Your Anime Starter Pack"
+        animes={starterPack}
+        viewAllHref="/anime?sort=rating"
+        horizontal
+      />
+
+      {/* 5. Continue Watching (Screenshot 2: 16:9 landscape card with episode & orange progress bar) */}
+      <section className="py-4 sm:py-6 max-w-[1280px] mx-auto px-4 sm:px-6">
+        <div className="flex items-center justify-between mb-3 sm:mb-4">
+          <h2 className="text-lg sm:text-xl font-bold tracking-tight text-white font-sans">
+            Continue Watching
+          </h2>
+          {recentHistory.length > 0 && (
+            <Link
+              to="/history"
+              className="text-xs sm:text-sm font-sans font-medium text-[#9b9ba6] hover:text-[#ff640a] transition-colors flex items-center gap-1"
+            >
+              <span>View All ({recentHistory.length})</span>
+              <span aria-hidden="true">›</span>
+            </Link>
+          )}
+        </div>
+
+        <div className="flex gap-4 overflow-x-auto scrollbar-none custom-scrollbar pb-2 -mx-4 px-4 sm:mx-0 sm:px-0">
+          {displayHistory.map((item) => {
+            const target = `/anime/${item.animeSlug || item.animeId}/episode/${item.episodeNumber}`;
+            const progressPct = Math.min(100, Math.max(15, Math.round(item.progress || 0)));
+
+            return (
+              <div
+                key={`${item.animeId}-${item.episodeNumber}`}
+                className="shrink-0 w-[280px] sm:w-[320px] md:w-[360px] group flex flex-col"
+              >
+                {/* 16:9 Thumbnail Frame */}
+                <div className="relative aspect-video rounded-[6px] overflow-hidden bg-[#16161a] shadow-lg">
+                  <Link to={target} className="block w-full h-full">
+                    <img
+                      src={item.episodeThumbnail || item.animePoster}
+                      alt={item.animeTitle}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      loading="lazy"
+                    />
+
+                    {/* Gradient overlay for text readability */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+
+                    {/* Center hover play button on desktop */}
+                    <div className="hidden md:flex absolute inset-0 items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="w-12 h-12 rounded-full bg-[#ff640a] text-black flex items-center justify-center shadow-xl">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5">
+                          <polygon points="6 3 20 12 6 21 6 3" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    {/* Bottom-left metadata: Play icon + Title + Episode & Duration */}
+                    <div className="absolute bottom-2.5 left-3 right-3 flex items-end justify-between">
+                      <div className="min-w-0 pr-2">
+                        <div className="flex items-center gap-2">
+                          {/* Small white play icon */}
+                          <div className="w-5 h-5 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center shrink-0">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="white" className="ml-0.5">
+                              <polygon points="6 3 20 12 6 21 6 3" />
+                            </svg>
+                          </div>
+                          <span className="font-sans font-bold text-xs sm:text-sm text-white truncate block">
+                            {item.animeTitle}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-[#c0c0c8] font-sans mt-0.5 ml-7">
+                          Episode {item.episodeNumber}
+                        </p>
+                      </div>
+
+                      {/* Duration badge on right (e.g. 23m) */}
+                      <span className="text-[11px] font-sans text-[#a0a0a8] shrink-0 font-medium pb-0.5">
+                        {item.duration ? `${Math.round(item.duration / 60)}m` : '23m'}
+                      </span>
+                    </div>
+
+                    {/* Crunchyroll Signature Bright Orange Progress Bar */}
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20">
+                      <div
+                        className="h-full bg-[#ff640a]"
+                        style={{ width: `${progressPct}%` }}
+                      />
+                    </div>
+                  </Link>
+
+                  {/* Top-right 3-dots button */}
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      openMenu({
+                        id: item.animeId,
+                        title: item.animeTitle,
+                        slug: item.animeSlug,
+                        poster: item.animePoster,
+                        genres: ['Action', 'Fantasy'],
+                        status: 'ongoing',
+                        synopsis: `Continue watching episode ${item.episodeNumber}`,
+                        type: 'TV',
+                        score: 85,
+                        episodes: 25,
+                      } as Anime);
+                    }}
+                    className="absolute top-2 right-2 p-1.5 rounded-full bg-black/60 hover:bg-black text-white/80 hover:text-white transition-colors cursor-pointer"
+                    aria-label="Options"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                      <circle cx="12" cy="5" r="2.2" />
+                      <circle cx="12" cy="12" r="2.2" />
+                      <circle cx="12" cy="19" r="2.2" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* 6. Movie Night (Screenshot 3) */}
+      <AnimeSection
+        title="Movie Night"
+        animes={movies}
+        viewAllHref="/anime?type=MOVIE"
+        horizontal
+      />
+
+      {/* 7. Binge-worthy Anime For You (Screenshot 3) */}
+      <AnimeSection
+        title="Binge-worthy Anime For You"
+        animes={bingeWorthy}
+        viewAllHref="/anime?status=completed"
+        horizontal
+      />
+
+      {/* 8. Popular Dubbed Anime (Screenshot 4) */}
+      <AnimeSection
+        title="Popular Dubbed Anime"
+        animes={starterPack.length > 0 ? starterPack.slice().reverse() : trending}
+        viewAllHref="/anime"
+        horizontal
+      />
+
+      {/* 9. Into The Fantasia (Screenshot 4) */}
+      <AnimeSection
+        title="Into The Fantasia"
+        animes={fantasia}
+        viewAllHref="/anime?genre=Fantasy"
+        horizontal
+      />
+
+      {/* Latest Releases */}
+      <AnimeSection
+        title="Latest Releases"
         animes={newUpdate}
         viewAllHref="/anime?sort=latest"
         horizontal
       />
 
-      {/* Genre Populer section */}
-      <section className="py-8 md:py-12">
-        <div className="max-w-[1280px] mx-auto px-6">
-          <span className="eyebrow-mono text-mute block mb-1">GENRES</span>
-          <h2 className="display-sm text-ink mb-6">Explore Genres</h2>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {genres.map((genre) => (
-              <Link
-                key={genre}
-                to={`/anime?genre=${encodeURIComponent(genre)}`}
-                className="group bg-canvas-card border border-transparent rounded-[8px] px-4 py-5 text-center hover:bg-canvas-soft transition-all duration-200"
-              >
-                <Badge variant="outline" size="md" className="mb-2">
-                  {genre}
-                </Badge>
-                <p className="text-mute text-[10px] font-mono uppercase tracking-wider group-hover:text-body transition-colors">
-                  Explore →
-                </p>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Stats / info band */}
-      <section className="py-12">
-        <div className="max-w-[1280px] mx-auto px-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8">
-            {[
-              {
-                label: 'TOTAL ANIME',
-                value: '80+',
-                icon: (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-sunset">
-                    <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18" />
-                    <line x1="7" y1="2" x2="7" y2="22" />
-                    <line x1="17" y1="2" x2="17" y2="22" />
-                    <line x1="2" y1="12" x2="22" y2="12" />
-                    <line x1="2" y1="7" x2="7" y2="7" />
-                    <line x1="2" y1="17" x2="7" y2="17" />
-                    <line x1="17" y1="17" x2="22" y2="17" />
-                    <line x1="17" y1="7" x2="22" y2="7" />
-                  </svg>
-                ),
-              },
-              {
-                label: 'EPISODES',
-                value: '1000+',
-                icon: (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-sunset">
-                    <rect x="2" y="7" width="20" height="15" rx="2" ry="2" />
-                    <polyline points="17 2 12 7 7 2" />
-                  </svg>
-                ),
-              },
-              {
-                label: 'GENRES',
-                value: `${genres.length}`,
-                icon: (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-sunset">
-                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" />
-                    <line x1="7" y1="7" x2="7.01" y2="7" />
-                  </svg>
-                ),
-              },
-              {
-                label: 'FREE STREAMING',
-                value: '100%',
-                icon: (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-sunset">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-                  </svg>
-                ),
-              },
-            ].map((stat) => (
-              <div
-                key={stat.label}
-                className="bg-canvas-card border border-hairline rounded-[8px] p-6 text-center flex flex-col items-center justify-center"
-              >
-                <div className="mb-2 p-2 bg-sunset/10 rounded-full border border-sunset/20">{stat.icon}</div>
-                <p className="display-sm text-ink mb-1">{stat.value}</p>
-                <p className="eyebrow-mono text-mute">{stat.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
     </div>
   );
 }
-

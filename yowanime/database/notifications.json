@@ -1,5 +1,19 @@
 [
   {
+    "id": "notif-scrape-1792103900674",
+    "type": "update",
+    "title": "Update Anime & Episode Terbaru",
+    "message": "Scrape otomatis (all) selesai dalam 28s. Episode & anime terbaru sudah diperbarui di database.",
+    "createdAt": "2026-10-15T22:38:20.674Z"
+  },
+  {
+    "id": "notif-scrape-1792103850780",
+    "type": "update",
+    "title": "Update Anime & Episode Terbaru",
+    "message": "Scrape otomatis (catalog) selesai dalam 130s. Episode & anime terbaru sudah diperbarui di database.",
+    "createdAt": "2026-10-15T22:37:30.780Z"
+  },
+  {
     "id": "notif-scrape-1791942932967",
     "type": "update",
     "title": "Update Anime & Episode Terbaru",

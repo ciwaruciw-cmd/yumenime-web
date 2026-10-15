@@ -3,11 +3,12 @@ import { Navbar } from '@/components/layout/Navbar';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Footer } from '@/components/layout/Footer';
 import { AppRoutes } from '@/routes/AppRoutes';
+import { AnimeActionModal } from '@/components/anime/AnimeActionModal';
 
 /**
  * Root App component.
  * BrowserRouter wraps the entire app.
- * Navbar (sticky top) + routed pages + Footer + BottomNav (mobile).
+ * Navbar (top bar) + routed pages + Footer + BottomNav (mobile Crunchyroll tabs) + AnimeActionModal.
  */
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
         </main>
         <Footer />
         <BottomNav />
+        <AnimeActionModal />
       </div>
     </BrowserRouter>
   );

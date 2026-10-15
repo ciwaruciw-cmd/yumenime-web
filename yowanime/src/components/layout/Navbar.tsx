@@ -19,6 +19,7 @@ import type { Anime } from '@/types/anime';
  */
 export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showCastModal, setShowCastModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Anime[]>([]);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -102,25 +103,39 @@ export function Navbar() {
   };
 
   return (
-    <header
-      className={clsx(
-        'fixed top-0 left-0 right-0 z-40 transition-colors duration-200',
-        scrolled
-          ? 'bg-canvas md:bg-canvas/95 md:backdrop-blur-md border-b border-hairline shadow-sm'
-          : 'bg-canvas border-b border-hairline/40'
-      )}
-    >
-      <div className="max-w-[1280px] mx-auto px-4 sm:px-6 h-12 sm:h-14 flex items-center gap-3 sm:gap-6">
-        {/* Logo */}
-        <Link
-          to="/"
-          className="flex items-center shrink-0 group"
-          aria-label="Yumenime home"
-        >
-          <span className="text-ink font-display text-sm tracking-tight font-medium group-hover:text-sunset transition-colors">
-            YUMENIME
-          </span>
-        </Link>
+    <>
+      <header
+        className={clsx(
+          'fixed top-0 left-0 right-0 z-40 transition-all duration-300',
+          scrolled
+            ? 'bg-black/95 backdrop-blur-md border-b border-[#1a1a1c] shadow-lg'
+            : 'bg-gradient-to-b from-black/80 via-black/30 to-transparent md:bg-canvas md:border-b md:border-hairline/40'
+        )}
+      >
+        <div className="max-w-[1280px] mx-auto px-4 sm:px-6 h-12 sm:h-14 flex items-center justify-between gap-3 sm:gap-6">
+          {/* Logo — Crunchyroll style on mobile, brand text on desktop */}
+          <Link
+            to="/"
+            className="flex items-center shrink-0 group gap-2"
+            aria-label="Yumenime home"
+          >
+            {/* Mobile: Crunchyroll signature eye logo */}
+            <div className="md:hidden flex items-center">
+              <svg viewBox="0 0 36 36" className="w-8 h-8 drop-shadow-md">
+                <circle cx="18" cy="18" r="17" fill="#ff640a" />
+                <path
+                  d="M18 5.5C11.1 5.5 5.5 11.1 5.5 18C5.5 24.9 11.1 30.5 18 30.5C21.1 30.5 23.9 29.4 26 27.5C20.2 27.5 15.5 22.8 15.5 17C15.5 11.2 20.2 6.5 26 6.5C23.9 4.6 21.1 5.5 18 5.5Z"
+                  fill="#000000"
+                />
+                <circle cx="23.5" cy="17" r="4" fill="#ff640a" />
+              </svg>
+            </div>
+
+            {/* Desktop logo text */}
+            <span className="hidden md:inline text-ink font-display text-sm tracking-tight font-medium group-hover:text-sunset transition-colors">
+              YUMENIME
+            </span>
+          </Link>
 
         {/* Desktop nav links */}
         <nav className="hidden md:flex items-center gap-1" aria-label="Primary navigation">
@@ -397,26 +412,50 @@ export function Navbar() {
           )}
         </div>
 
-        {/* Mobile controls (Theme Toggle + Notification Bell + Hamburger button) */}
-        <div className="flex md:hidden items-center gap-1 ml-auto">
-          <ThemeToggle />
-          <NotificationBell />
+        {/* Mobile controls — Crunchyroll style (Cast button + Search button) */}
+        <div className="flex md:hidden items-center gap-1.5 ml-auto">
+          {/* Chromecast button */}
           <button
-            className="text-body p-1.5 rounded-full hover:bg-white/5 transition-colors cursor-pointer"
-            onClick={() => setMenuOpen((v) => !v)}
-            aria-label={menuOpen ? 'Close menu' : 'Open menu'}
-            aria-expanded={menuOpen}
+            onClick={() => setShowCastModal(true)}
+            className="p-1.5 text-white/90 hover:text-[#ff640a] transition-colors cursor-pointer"
+            aria-label="Cast to TV"
+            title="Cast to TV"
           >
-            {menuOpen ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
-              </svg>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M3 12h18M3 6h18M3 18h18" strokeLinecap="round" />
-              </svg>
-            )}
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6M2 20h.01" />
+            </svg>
           </button>
+
+          {/* Search button */}
+          <Link
+            to="/search"
+            className="p-1.5 text-white/90 hover:text-[#ff640a] transition-colors cursor-pointer"
+            aria-label="Search anime"
+            title="Search"
+          >
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="11" cy="11" r="8" />
+              <line x1="21" y1="21" x2="16.65" y2="16.65" />
+            </svg>
+          </Link>
         </div>
       </div>
 
@@ -586,5 +625,35 @@ export function Navbar() {
         </div>
       )}
     </header>
+
+      {/* Google Cast / Chromecast info modal */}
+      {showCastModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/75 backdrop-blur-sm"
+            onClick={() => setShowCastModal(false)}
+          />
+          <div className="relative z-10 w-full max-w-sm bg-[#16161b] border border-white/10 rounded-[16px] p-5 shadow-2xl animate-fade-in-up text-center">
+            <div className="w-12 h-12 rounded-full bg-[#ff640a]/15 border border-[#ff640a]/30 flex items-center justify-center mx-auto mb-3 text-[#ff640a]">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6M2 20h.01" />
+              </svg>
+            </div>
+            <h3 className="font-sans font-bold text-base text-white mb-1.5">
+              Cast ke TV
+            </h3>
+            <p className="text-xs text-[#9b9ba6] leading-relaxed mb-4">
+              Dukungan Chromecast & AirPlay aktif. Buka episode apa saja dan klik tombol cast pada pemutar video untuk menonton di Smart TV Anda.
+            </p>
+            <button
+              onClick={() => setShowCastModal(false)}
+              className="w-full py-2.5 bg-[#ff640a] hover:bg-[#ff7a29] text-black font-bold text-xs rounded-full transition-colors cursor-pointer"
+            >
+              Mengerti
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
