@@ -159,7 +159,6 @@ function isDummyStream(url?: string): boolean {
     url.includes('filedon.co') ||
     url.includes('otakufiles.net') ||
     url.includes('krakenfiles.com') ||
-    url.includes('googlevideo.com') ||
     url.includes('.mkv')
   );
 }
@@ -273,8 +272,8 @@ export async function resolveEpisodeStream(
 }
 
 /**
- * Cari grup episode yang cocok dari scraped_episodes.json via API.
- * Urutan prioritas: exact animeId → exact slug → fuzzy title match.
+ * Cari grup episode yang cocok dari scraped_episodes.json via API server-side match.
+ * Server melakukan pencarian in-memory dalam ~1ms tanpa mendownload database ke browser.
  */
 async function findScrapedEpisodes(
   animeId: string,
@@ -282,55 +281,23 @@ async function findScrapedEpisodes(
   animeTitles: string[]
 ): Promise<{ episodes: any[]; hasReal: boolean } | null> {
   try {
-    // 1. Try direct animeId and slug match first (fastest)
-    const candidateIds = [...new Set([animeId, animeSlug].filter(Boolean))];
-    for (const id of candidateIds) {
-      const r = await fetch(`/api/scraped/episodes?animeId=${encodeURIComponent(id)}`);
-      if (r.ok) {
-        const eps = await r.json();
-        if (Array.isArray(eps) && eps.length > 0) {
-          const hasReal = eps.some((e: any) => e.sources?.some((s: any) => !isDummyStream(s.url)));
-          if (hasReal) return { episodes: eps, hasReal: true };
-        }
+    const primaryTitle = animeTitles[0] || animeSlug || animeId;
+    const romajiTitle = animeTitles[1] || '';
+
+    const params = new URLSearchParams({
+      animeId: animeId || '',
+      slug: animeSlug || '',
+      title: primaryTitle,
+      romaji: romajiTitle,
+    });
+
+    const res = await fetch(`/api/scraped/match?${params.toString()}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.episodes) && data.episodes.length > 0) {
+        return { episodes: data.episodes, hasReal: Boolean(data.hasReal) };
       }
     }
-
-    // 2. Fetch all scraped animes and find matching candidates sorted by score
-    const animesRes = await fetch('/api/scraped/animes');
-    if (!animesRes.ok) return null;
-    const scrapedAnimes: any[] = await animesRes.json();
-
-    const candidates: Array<{ id: string; score: number }> = [];
-
-    for (const sa of scrapedAnimes) {
-      const candidateTitles = [sa.id, sa.slug, sa.title, sa.titleRomaji, sa.titleEnglish].filter(Boolean);
-      let maxScore = 0;
-      for (const qTitle of animeTitles) {
-        for (const cTitle of candidateTitles) {
-          const score = slugScore(qTitle, cTitle);
-          if (score > maxScore) {
-            maxScore = score;
-          }
-        }
-      }
-      if (maxScore >= 0.55) {
-        candidates.push({ id: sa.id, score: maxScore });
-      }
-    }
-
-    candidates.sort((a, b) => b.score - a.score);
-
-    for (const cand of candidates.slice(0, 5)) {
-      const r = await fetch(`/api/scraped/episodes?animeId=${encodeURIComponent(cand.id)}`);
-      if (r.ok) {
-        const eps = await r.json();
-        if (Array.isArray(eps) && eps.length > 0) {
-          const hasReal = eps.some((e: any) => e.sources?.some((s: any) => !isDummyStream(s.url)));
-          if (hasReal) return { episodes: eps, hasReal: true };
-        }
-      }
-    }
-
     return null;
   } catch {
     return null;

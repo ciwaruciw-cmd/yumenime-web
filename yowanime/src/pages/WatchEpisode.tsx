@@ -57,7 +57,6 @@ export default function WatchEpisode() {
     !url.includes('meownime.ltd') &&
     !url.includes('otakufiles.net') &&
     !url.includes('krakenfiles.com') &&
-    !url.includes('googlevideo.com') &&
     !url.includes('.mkv');
 
   // Auto-resolve real 1080p & 720p stream when episode has no/dummy sources

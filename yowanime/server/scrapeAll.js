@@ -114,10 +114,12 @@ async function resolveStreamUrl(url) {
     const r = await fetchUrl(clean, { 'Referer': 'https://otakudesu.blog/' }, 10000);
     const h = r.body;
     const mp4 = h.match(/const\s+videoURL\s*=\s*["']([^"']+)["']/i) ||
+                h.match(/video(?:Player)?\.src\s*=\s*["']([^"']+)["']/i) ||
                 h.match(/file\s*:\s*["']([^"']+\.mp4[^"']*)['"]/i) ||
                 h.match(/https?:\/\/[^\s"'<>]+\.odcloud\.net\/[^\s"'<>]+\.mp4/i) ||
-                h.match(/https?:\/\/[^\s"'<>]+\.(?:mp4|m3u8)/i);
-    if (mp4) return mp4[1] || mp4[0];
+                h.match(/https?:\/\/[^\s"'<>]+\.(?:mp4|m3u8)/i) ||
+                h.match(/<source[^>]+src=["'](https?:\/\/[^"']+)["']/i);
+    if (mp4) return (mp4[1] || mp4[0]).replace(/&amp;/g, '&');
     const blogger = h.match(/<iframe[^>]+src=["'](https:\/\/www\.blogger\.com\/video\.g\?[^"']+)["']/i);
     if (blogger) return blogger[1].replace(/&amp;/g, '&');
     const iframe = h.match(/<iframe[^>]+src=["'](https?:\/\/[^"']+)["']/i);
@@ -196,8 +198,9 @@ async function scrapeOtakudesu(existingAnimeMap, existingEpSet, isFull = false) 
       const score = scoreM ? (parseFloat(scoreM[1]) || 7.5) : (existingAnime?.score || 7.5);
 
       const actionMs = [...h.matchAll(/action:\s*["']([a-f0-9]{32})["']/gi)].map(m => m[1]);
-      const streamAction = actionMs[0] || '';
-      const nonceAction = actionMs[1] || '';
+      // Default action hashes yang sudah dikonfirmasi valid di Otakudesu (stream + nonce)
+      const streamAction = actionMs[0] || '2a3505c93b0035d3f455df82bf976b84';
+      const nonceAction = actionMs[1] || 'aa1208d27f29ca340c92c66d1926f13f';
 
       // Filter: hanya episode yang BELUM ada di DB yang di-fetch (skip in catalog mode)
       const epsToFetch = isCatalog ? [] : sortedEps.map((e, idx) => ({ ...e, epNum: idx + 1 }))
@@ -228,13 +231,19 @@ async function scrapeOtakudesu(existingAnimeMap, existingEpSet, isFull = false) 
           const epNA = epActionMs[1] || nonceAction;
 
           async function resolveDC(dc) {
-            if (!dc || !epSA || !epNA) return '';
+            if (!dc) return '';
+            // Use hardcoded defaults if action hashes not found in episode page
+            const sa = epSA || '2a3505c93b0035d3f455df82bf976b84';
+            const na = epNA || 'aa1208d27f29ca340c92c66d1926f13f';
             try {
-              const nr = await postAjax('https://otakudesu.blog/wp-admin/admin-ajax.php', { action: epNA }, epData.url);
+              const nr = await postAjax('https://otakudesu.blog/wp-admin/admin-ajax.php', { action: na }, epData.url);
               const nonce = JSON.parse(nr).data;
+              if (!nonce) return '';
               const payload = JSON.parse(Buffer.from(dc, 'base64').toString('utf-8'));
-              const sr = await postAjax('https://otakudesu.blog/wp-admin/admin-ajax.php', { ...payload, nonce, action: epSA }, epData.url);
-              const ihtml = Buffer.from(JSON.parse(sr).data, 'base64').toString('utf-8');
+              const sr = await postAjax('https://otakudesu.blog/wp-admin/admin-ajax.php', { ...payload, nonce, action: sa }, epData.url);
+              const parsed = JSON.parse(sr);
+              if (!parsed.data) return '';
+              const ihtml = Buffer.from(parsed.data, 'base64').toString('utf-8');
               const srcM = ihtml.match(/src=["']([^"']+)["']/i);
               if (srcM) return await resolveStreamUrl(srcM[1]);
             } catch {}
@@ -246,10 +255,16 @@ async function scrapeOtakudesu(existingAnimeMap, existingEpSet, isFull = false) 
           url480 = await resolveDC(dc480);
 
           if (!url720) {
+            // Fallback: iframe langsung di halaman episode (tanpa AJAX)
             const dl = eh.match(/720p<\/strong>\s*<a[^>]+href=["']([^"']+)["']/i) ||
                        eh.match(/<div class="responsive-embed-stream"[^>]*>\s*<iframe[^>]+src=["']([^"']+)["']/i) ||
                        eh.match(/<iframe[^>]+src=["'](https?:\/\/[^"']+)["']/i);
             if (dl) url720 = await resolveStreamUrl(dl[1]);
+          }
+          if (!url480 && !url720) {
+            // Fallback ke 360p sebagai last resort
+            const dl360 = eh.match(/360p<\/strong>\s*<a[^>]+href=["']([^"']+)["']/i);
+            if (dl360) url480 = await resolveStreamUrl(dl360[1]);
           }
           if (!url1080) {
             const dl = eh.match(/1080p<\/strong>\s*<a[^>]+href=["']([^"']+)["']/i);
@@ -335,7 +350,7 @@ async function scrapeSamehadaku(existingAnimeMap, existingEpSet, isFull = false)
 
       const cleanTitle = titleM ? titleM[1].replace(/<[^>]+>/g, '').replace(/Subtitle Indonesia/gi, '').trim() : 'Samehadaku Anime';
       const slug = slugify(cleanTitle);
-      const animeId = `same-${slug}-sub-indo`;
+      const animeId = `same-${slug}`;
 
       const existingAnime = existingAnimeMap.get(animeId);
       if (existingAnime && (isCatalog || (existingAnime.status === 'completed' && existingAnime.episodes > 0 && !isFull))) {
@@ -572,34 +587,58 @@ async function main() {
   console.log(`📊 Data di Database saat ini: ${existingAnimes.length} anime, ${existingEps.length} episode`);
 
   const existingAnimeMap = new Map(existingAnimes.map(a => [a.id, a]));
-  const existingEpSet = new Set(existingEps.map(e => e.id));
+  const existingEpMap = new Map();
+  existingEps.filter(e => e.sources?.some(s => isReal(s.url))).forEach(e => existingEpMap.set(e.id, e));
+  const existingEpSet = new Set(existingEpMap.keys());
 
-  const { animes: otakuAnimes, episodes: otakuEps } = await scrapeOtakudesu(existingAnimeMap, existingEpSet, isFull);
-  const { animes: sameAnimes, episodes: sameEps } = await scrapeSamehadaku(existingAnimeMap, existingEpSet, isFull);
-  const { animes: sokujaAnimes, episodes: sokujaEps } = await scrapeSokuja(existingAnimeMap, existingEpSet, isFull);
+  const saveProgress = (sourceName, newAnimes = [], newEpisodes = []) => {
+    newAnimes.forEach(a => existingAnimeMap.set(a.id, a));
+    newEpisodes.filter(e => e.sources?.some(s => isReal(s.url))).forEach(e => {
+      existingEpMap.set(e.id, e);
+      existingEpSet.add(e.id);
+    });
+    const allAnimes = Array.from(existingAnimeMap.values());
+    const allEps = Array.from(existingEpMap.values());
+    fs.writeFileSync(ANIME_JSON, JSON.stringify(allAnimes, null, 2), 'utf8');
+    fs.writeFileSync(EP_JSON, JSON.stringify(allEps, null, 2), 'utf8');
+    console.log(`💾 [${sourceName}] Progress tersimpan: ${allAnimes.length} anime, ${allEps.length} episode total.`);
+  };
 
-  // Merge: new scrape updates old, existing is preserved
-  const animeMap = new Map();
-  existingAnimes.forEach(a => animeMap.set(a.id, a));
-  [...otakuAnimes, ...sameAnimes, ...sokujaAnimes].forEach(a => animeMap.set(a.id, a));
+  let otakuCount = 0, sameCount = 0, sokujaCount = 0;
 
-  const epMap = new Map();
-  existingEps.filter(e => e.sources?.some(s => isReal(s.url))).forEach(e => epMap.set(e.id, e));
-  [...otakuEps, ...sameEps, ...sokujaEps].filter(e => e.sources?.some(s => isReal(s.url))).forEach(e => epMap.set(e.id, e));
+  try {
+    const { animes: otakuAnimes, episodes: otakuEps } = await scrapeOtakudesu(existingAnimeMap, existingEpSet, isFull);
+    otakuCount = otakuEps.length;
+    saveProgress('Otakudesu', otakuAnimes, otakuEps);
+  } catch (err) {
+    console.error('❌ [Otakudesu] Error:', err.message);
+  }
 
-  const allAnimes = Array.from(animeMap.values());
-  const allEps = Array.from(epMap.values());
+  try {
+    const { animes: sameAnimes, episodes: sameEps } = await scrapeSamehadaku(existingAnimeMap, existingEpSet, isFull);
+    sameCount = sameEps.length;
+    saveProgress('Samehadaku', sameAnimes, sameEps);
+  } catch (err) {
+    console.error('❌ [Samehadaku] Error:', err.message);
+  }
+
+  try {
+    const { animes: sokujaAnimes, episodes: sokujaEps } = await scrapeSokuja(existingAnimeMap, existingEpSet, isFull);
+    sokujaCount = sokujaEps.length;
+    saveProgress('Sokuja', sokujaAnimes, sokujaEps);
+  } catch (err) {
+    console.error('❌ [Sokuja] Error:', err.message);
+  }
+
+  const finalAnimes = Array.from(existingAnimeMap.values());
+  const finalEps = Array.from(existingEpMap.values());
 
   console.log(`\n${'='.repeat(60)}`);
-  console.log(`✅ Total anime di database: ${allAnimes.length}`);
-  console.log(`✅ Total episode dengan streaming aktif: ${allEps.length}`);
-  console.log(`   - Tambahan episode baru Otakudesu: ${otakuEps.length}`);
-  console.log(`   - Tambahan episode baru Samehadaku: ${sameEps.length}`);
-  console.log(`   - Tambahan episode baru Sokuja: ${sokujaEps.length}`);
-
-  // Save intermediate per-source to help with debug
-  fs.writeFileSync(ANIME_JSON, JSON.stringify(allAnimes, null, 2), 'utf8');
-  fs.writeFileSync(EP_JSON, JSON.stringify(allEps, null, 2), 'utf8');
+  console.log(`✅ Total anime di database: ${finalAnimes.length}`);
+  console.log(`✅ Total episode dengan streaming aktif: ${finalEps.length}`);
+  console.log(`   - Tambahan episode baru Otakudesu: ${otakuCount}`);
+  console.log(`   - Tambahan episode baru Samehadaku: ${sameCount}`);
+  console.log(`   - Tambahan episode baru Sokuja: ${sokujaCount}`);
   console.log(`\n📁 Tersimpan: ${ANIME_JSON}`);
   console.log(`📁 Tersimpan: ${EP_JSON}`);
   console.log('\n🎉 Scrape SELESAI!');

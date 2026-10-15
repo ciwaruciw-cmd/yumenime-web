@@ -35,6 +35,50 @@ function apiDevPlugin(): Plugin {
   const scrapedEpisodesFile = path.join(dbDir, 'scraped_episodes.json')
   const scrapedAnimesFile = path.join(dbDir, 'scraped_animes.json')
 
+  // In-memory cache for large JSON datasets (scraped_animes 2.7MB, scraped_episodes 2.9MB)
+  let _cachedAnimes: any[] = []
+  let _cachedAnimesMtime = 0
+  let _cachedEpisodes: any[] = []
+  let _cachedEpisodesMap = new Map<string, any[]>()
+  let _cachedEpisodesMtime = 0
+
+  const getCachedAnimes = (): any[] => {
+    try {
+      if (!fs.existsSync(scrapedAnimesFile)) return []
+      const stat = fs.statSync(scrapedAnimesFile)
+      if (_cachedAnimes.length > 0 && stat.mtimeMs === _cachedAnimesMtime) {
+        return _cachedAnimes
+      }
+      _cachedAnimes = JSON.parse(fs.readFileSync(scrapedAnimesFile, 'utf-8'))
+      _cachedAnimesMtime = stat.mtimeMs
+      return _cachedAnimes
+    } catch {
+      return _cachedAnimes
+    }
+  }
+
+  const getCachedEpisodes = (): { list: any[]; map: Map<string, any[]> } => {
+    try {
+      if (!fs.existsSync(scrapedEpisodesFile)) return { list: [], map: new Map() }
+      const stat = fs.statSync(scrapedEpisodesFile)
+      if (_cachedEpisodes.length > 0 && stat.mtimeMs === _cachedEpisodesMtime) {
+        return { list: _cachedEpisodes, map: _cachedEpisodesMap }
+      }
+      _cachedEpisodes = JSON.parse(fs.readFileSync(scrapedEpisodesFile, 'utf-8'))
+      _cachedEpisodesMtime = stat.mtimeMs
+      _cachedEpisodesMap = new Map()
+      for (const ep of _cachedEpisodes) {
+        if (!ep.animeId) continue
+        const existing = _cachedEpisodesMap.get(ep.animeId)
+        if (existing) existing.push(ep)
+        else _cachedEpisodesMap.set(ep.animeId, [ep])
+      }
+      return { list: _cachedEpisodes, map: _cachedEpisodesMap }
+    } catch {
+      return { list: _cachedEpisodes, map: _cachedEpisodesMap }
+    }
+  }
+
   const readData = (filePath: string, defaultData: any = []): any[] => {
     try {
       const dir = path.dirname(filePath)
@@ -797,68 +841,163 @@ function apiDevPlugin(): Plugin {
           return
         }
 
-        // ── Scraped Episodes Database API ─────────────────────────────────
+        // ── Scraped Match API (Fast in-memory fuzzy match, zero disk I/O, ~1ms) ──
+        // GET /api/scraped/match?title=&romaji=&animeId=&slug=
+        if (req.method === 'GET' && url.pathname === '/api/scraped/match') {
+          try {
+            const animeId = url.searchParams.get('animeId') || '';
+            const slug = url.searchParams.get('slug') || '';
+            const title = url.searchParams.get('title') || '';
+            const romaji = url.searchParams.get('romaji') || '';
+            const { map: epMap } = getCachedEpisodes();
+
+            // 1. Direct ID & slug match in epMap (0.01ms)
+            const idCandidates = [
+              animeId,
+              slug,
+              `otaku-${slug}`,
+              `otaku-${animeId}`,
+              `same-${slug}`,
+              `same-${animeId}`,
+              `sokuja-${slug}`,
+              `sokuja-${animeId}`,
+            ].filter(Boolean);
+
+            for (const candId of idCandidates) {
+              const matched = epMap.get(candId);
+              if (matched && matched.length > 0) {
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ episodes: matched, hasReal: true }));
+                return;
+              }
+            }
+
+            // 2. Fast in-memory title match against cached animes (~0.5ms)
+            const animes = getCachedAnimes();
+            const clean = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
+            const queryTitles = [title, romaji, slug].map(clean).filter((t) => t.length > 2);
+
+            let bestAnimeId = '';
+            let bestScore = 0;
+
+            for (const a of animes) {
+              const candTitles = [a.id, a.slug, a.title, a.titleEnglish, a.titleJapanese, a.titleRomaji]
+                .filter(Boolean)
+                .map(clean);
+
+              for (const q of queryTitles) {
+                const qTokens = q.split(/\s+/).filter((w) => w.length > 1);
+                for (const c of candTitles) {
+                  if (c === q) {
+                    bestScore = 1.0;
+                    bestAnimeId = a.id;
+                    break;
+                  }
+                  if (c.includes(q) || q.includes(c)) {
+                    const score = Math.min(q.length, c.length) / Math.max(q.length, c.length);
+                    if (score > bestScore) {
+                      bestScore = score;
+                      bestAnimeId = a.id;
+                    }
+                  } else if (qTokens.length > 1) {
+                    let matched = 0;
+                    for (const tok of qTokens) {
+                      if (c.includes(tok)) matched++;
+                    }
+                    const tokScore = matched / qTokens.length;
+                    if (tokScore > bestScore && tokScore >= 0.75) {
+                      bestScore = tokScore;
+                      bestAnimeId = a.id;
+                    }
+                  }
+                }
+                if (bestScore === 1.0) break;
+              }
+              if (bestScore === 1.0) break;
+            }
+
+            if (bestAnimeId && bestScore >= 0.6) {
+              const matched = epMap.get(bestAnimeId) || [];
+              if (matched.length > 0) {
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ episodes: matched, hasReal: true }));
+                return;
+              }
+            }
+
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ episodes: [], hasReal: false }));
+          } catch (err: any) {
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: err.message, episodes: [], hasReal: false }));
+          }
+          return;
+        }
+
+        // ── Scraped Episodes Database API (Served from in-memory cache) ───────────
         // GET /api/scraped/episodes?animeId=&slug=
         if (req.method === 'GET' && url.pathname === '/api/scraped/episodes') {
           try {
-            const animeId = url.searchParams.get('animeId') || ''
-            const slug = url.searchParams.get('slug') || ''
-            const all: any[] = fs.existsSync(scrapedEpisodesFile)
-              ? JSON.parse(fs.readFileSync(scrapedEpisodesFile, 'utf-8'))
-              : []
-            let result = all
-            if (animeId || slug) {
+            const animeId = url.searchParams.get('animeId') || '';
+            const slug = url.searchParams.get('slug') || '';
+            const { list: all, map: epMap } = getCachedEpisodes();
+            let result = all;
+            if (animeId && epMap.has(animeId)) {
+              result = epMap.get(animeId) || [];
+            } else if (slug && epMap.has(slug)) {
+              result = epMap.get(slug) || [];
+            } else if (animeId || slug) {
               result = all.filter(
                 (e: any) => e.animeId === animeId || e.animeId === slug
-              )
+              );
             }
-            res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify(result))
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(result));
           } catch (err: any) {
-            res.statusCode = 500
-            res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({ error: err.message }))
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: err.message }));
           }
-          return
+          return;
         }
 
-        // GET /api/scraped/animes?slug=&title=
+        // GET /api/scraped/animes?slug=&title= (Served from in-memory cache)
         if (req.method === 'GET' && url.pathname === '/api/scraped/animes') {
           try {
-            const slug = url.searchParams.get('slug') || ''
-            const title = url.searchParams.get('title') || ''
-            const all: any[] = fs.existsSync(scrapedAnimesFile)
-              ? JSON.parse(fs.readFileSync(scrapedAnimesFile, 'utf-8'))
-              : []
-            let result = all
+            const slug = url.searchParams.get('slug') || '';
+            const title = url.searchParams.get('title') || '';
+            const all = getCachedAnimes();
+            let result = all;
             if (slug || title) {
-              const q = (slug || title).toLowerCase()
+              const q = (slug || title).toLowerCase();
               result = all.filter(
                 (a: any) =>
                   a.slug === slug ||
                   a.id === slug ||
                   (a.title && a.title.toLowerCase().includes(q)) ||
                   (a.slug && a.slug.includes(q))
-              )
+              );
             }
-            res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify(result))
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify(result));
           } catch (err: any) {
-            res.statusCode = 500
-            res.setHeader('Content-Type', 'application/json')
-            res.end(JSON.stringify({ error: err.message }))
+            res.statusCode = 500;
+            res.setHeader('Content-Type', 'application/json');
+            res.end(JSON.stringify({ error: err.message }));
           }
-          return
+          return;
         }
 
         // ── Stream Resolver Endpoint ──────────────────────────────────────
-        // GET /api/stream/resolve?animeId=...&title=...&ep=...
+        // GET /api/stream/resolve?animeId=...&title=...&romaji=...&ep=...
         if (req.method === 'GET' && url.pathname === '/api/stream/resolve') {
           const animeId = url.searchParams.get('animeId') || '';
           const title = url.searchParams.get('title') || animeId;
+          const romaji = url.searchParams.get('romaji') || '';
           const episodeNumber = Number(url.searchParams.get('ep') || url.searchParams.get('episode') || 1);
 
-          resolveStreamForEpisode({ animeId, animeTitle: title, episodeNumber })
+          resolveStreamForEpisode({ animeId, animeTitle: title, romaji, episodeNumber })
             .then((result: any) => {
               res.setHeader('Content-Type', 'application/json');
               res.end(JSON.stringify(result));
@@ -870,6 +1009,7 @@ function apiDevPlugin(): Plugin {
             });
           return;
         }
+
 
         // ── Stream Video & Download Endpoints (Streaming Proxy with Range & Redirects) ─────
         // GET /api/stream/video?url=...
@@ -886,7 +1026,7 @@ function apiDevPlugin(): Plugin {
           const filename = url.searchParams.get('filename') || 'anime-episode.mp4';
 
           const streamTarget = (target: string, redirectCount = 0) => {
-            if (redirectCount > 6) {
+            if (redirectCount > 10) {
               res.statusCode = 508;
               res.end('Too many redirects');
               return;
@@ -941,6 +1081,14 @@ function apiDevPlugin(): Plugin {
                 }
 
                 pRes.pipe(res);
+              });
+
+              pReq.setTimeout(15000, () => {
+                pReq.destroy();
+                if (!res.headersSent) {
+                  res.statusCode = 504;
+                  res.end('Gateway timeout fetching stream chunk');
+                }
               });
 
               pReq.on('error', (err) => {
@@ -1009,29 +1157,6 @@ function apiDevPlugin(): Plugin {
               pRes.on('data', (chunk) => (data += chunk));
               pRes.on('end', () => {
                 let html = data;
-                const host = req.headers.host || 'localhost:5173';
-                const proto = req.headers['x-forwarded-proto'] || 'http';
-                const origin = `${proto}://${host}`;
-
-                // Rewrite any direct video source in <source src="..."> or <video src="..."> tags to use /api/stream/video
-                html = html.replace(/<source([^>]+)src=["'](https?:\/\/[^"']+)["']([^>]*)>/gi, (_match, before, src, after) => {
-                  const proxied = `${origin}/api/stream/video?url=${encodeURIComponent(src.replace(/&amp;/g, '&'))}`;
-                  return `<source${before}src="${proxied}"${after}>`;
-                });
-                html = html.replace(/<video([^>]+)src=["'](https?:\/\/[^"']+)["']([^>]*)>/gi, (_match, before, src, after) => {
-                  const proxied = `${origin}/api/stream/video?url=${encodeURIComponent(src.replace(/&amp;/g, '&'))}`;
-                  return `<video${before}src="${proxied}"${after}>`;
-                });
-
-                // Rewrite video.src or videoURL in scripts
-                html = html.replace(/(video(?:Player)?\.src\s*=\s*["'])(https?:\/\/[^"']+)(["'])/gi, (_match, prefix, src, suffix) => {
-                  const proxied = `${origin}/api/stream/video?url=${encodeURIComponent(src.replace(/&amp;/g, '&'))}`;
-                  return `${prefix}${proxied}${suffix}`;
-                });
-                html = html.replace(/(const\s+videoURL\s*=\s*["'])(https?:\/\/[^"']+)(["'])/gi, (_match, prefix, src, suffix) => {
-                  const proxied = `${origin}/api/stream/video?url=${encodeURIComponent(src.replace(/&amp;/g, '&'))}`;
-                  return `${prefix}${proxied}${suffix}`;
-                });
 
                 // Inject player style to make sure video fills the viewport and plays nicely
                 const injectedStyle = `

@@ -653,9 +653,13 @@ export function VideoPlayer({
         <video
           ref={videoRef}
           src={
+            // Only proxy through /api/stream/video for URLs that actually need it:
+            // 1. Already a local API path
+            // 2. Known CDN hosts that block browser direct access (sokuja, odcloud)
+            // Everything else (googlestorage, mdn, archive, etc.) plays direct for speed
             videoUrl.startsWith('/api/stream/video') || videoUrl.startsWith('data:') || videoUrl.startsWith('blob:') || videoUrl.startsWith('/')
               ? videoUrl
-              : (videoUrl.includes('sokuja') || videoUrl.includes('googlevideo') || videoUrl.includes('.mp4') || videoUrl.includes('.m3u8'))
+              : (videoUrl.includes('sokuja.uk') || videoUrl.includes('odcloud.net') || videoUrl.includes('desustream') || videoUrl.includes('googlevideo.com'))
                 ? `/api/stream/video?url=${encodeURIComponent(videoUrl)}`
                 : videoUrl
           }

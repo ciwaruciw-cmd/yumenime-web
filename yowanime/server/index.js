@@ -358,6 +358,89 @@ app.get('/api/genres', async (req, res) => {
   }
 });
 
+// ── Scraped Match API (Fast in-memory fuzzy match, zero disk I/O) ──
+// GET /api/scraped/match?title=&romaji=&animeId=&slug=
+app.get('/api/scraped/match', (req, res) => {
+  try {
+    const { animeId = '', slug = '', title = '', romaji = '' } = req.query;
+    const allEps = getScrapedEpisodes();
+
+    // 1. Direct ID & slug match in episodes
+    const idCandidates = [
+      animeId,
+      slug,
+      `otaku-${slug}`,
+      `otaku-${animeId}`,
+      `same-${slug}`,
+      `same-${animeId}`,
+      `sokuja-${slug}`,
+      `sokuja-${animeId}`,
+    ].filter(Boolean);
+
+    for (const candId of idCandidates) {
+      const matched = allEps.filter((e) => e.animeId === candId);
+      if (matched.length > 0) {
+        return res.json({ episodes: matched, hasReal: true });
+      }
+    }
+
+    // 2. Fast in-memory title match against cached animes
+    const animes = getScrapedAnimes();
+    const clean = (s) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').trim();
+    const queryTitles = [title, romaji, slug].map(clean).filter((t) => t.length > 2);
+
+    let bestAnimeId = '';
+    let bestScore = 0;
+
+    for (const a of animes) {
+      const candTitles = [a.id, a.slug, a.title, a.titleEnglish, a.titleJapanese, a.titleRomaji]
+        .filter(Boolean)
+        .map(clean);
+
+      for (const q of queryTitles) {
+        const qTokens = q.split(/\s+/).filter((w) => w.length > 1);
+        for (const c of candTitles) {
+          if (c === q) {
+            bestScore = 1.0;
+            bestAnimeId = a.id;
+            break;
+          }
+          if (c.includes(q) || q.includes(c)) {
+            const score = Math.min(q.length, c.length) / Math.max(q.length, c.length);
+            if (score > bestScore) {
+              bestScore = score;
+              bestAnimeId = a.id;
+            }
+          } else if (qTokens.length > 1) {
+            let matched = 0;
+            for (const tok of qTokens) {
+              if (c.includes(tok)) matched++;
+            }
+            const tokScore = matched / qTokens.length;
+            if (tokScore > bestScore && tokScore >= 0.75) {
+              bestScore = tokScore;
+              bestAnimeId = a.id;
+            }
+          }
+        }
+        if (bestScore === 1.0) break;
+      }
+      if (bestScore === 1.0) break;
+    }
+
+    if (bestAnimeId && bestScore >= 0.6) {
+      const matched = allEps.filter((e) => e.animeId === bestAnimeId);
+      if (matched.length > 0) {
+        return res.json({ episodes: matched, hasReal: true });
+      }
+    }
+
+    res.json({ episodes: [], hasReal: false });
+  } catch (err) {
+    res.status(500).json({ error: err.message, episodes: [], hasReal: false });
+  }
+});
+
 // ── Scraped Episodes Database API ─────────────────────────────────
 // GET /api/scraped/episodes?animeId=&slug=
 app.get('/api/scraped/episodes', (req, res) => {

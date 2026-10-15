@@ -76,7 +76,7 @@ function fetchUrl(url, customHeaders = {}) {
     });
 
     req.on('error', reject);
-    req.setTimeout(25000, () => {
+    req.setTimeout(12000, () => {
       req.destroy();
       reject(new Error(`Timeout fetching ${url}`));
     });
@@ -107,7 +107,7 @@ function postAjax(url, data, referer = '') {
       }
     );
     req.on('error', reject);
-    req.setTimeout(15000, () => {
+    req.setTimeout(10000, () => {
       req.destroy();
       reject(new Error(`Timeout AJAX ${url}`));
     });
@@ -637,55 +637,46 @@ export async function resolveStreamForEpisode({ animeId, animeTitle, romaji, epi
     );
   };
 
+  // 3. Live resolution across providers — run ALL providers in PARALLEL for speed
+
+  // Helper to add timeout to any promise
+  const withTimeout = (promise, ms) =>
+    Promise.race([
+      promise,
+      new Promise((_, reject) => setTimeout(() => reject(new Error('provider_timeout')), ms)),
+    ]);
+
+  const tryResolve = async (fn, title, epN) => {
+    try {
+      return await withTimeout(fn(title, epN), 12000);
+    } catch {
+      return null;
+    }
+  };
+
   let result = null;
 
-  // Step A: Search for direct MP4 across all candidate titles
-  for (const candTitle of candidateTitles) {
-    // Try Otakudesu (most reliable provider for direct 720p/1080p MP4 streams via odcloud)
-    const otakuRes = await resolveFromOtakudesu(candTitle, epNum);
-    if (isPlayableDirect(otakuRes)) {
-      result = otakuRes;
+  // Run up to 3 candidate titles, each with all providers in parallel
+  for (const candTitle of candidateTitles.slice(0, 3)) {
+    const [otakuRes, sokuRes, sameRes] = await Promise.all([
+      tryResolve(resolveFromOtakudesu, candTitle, epNum),
+      tryResolve(resolveFromSokuja, candTitle, epNum),
+      tryResolve(resolveFromSamehadaku, candTitle, epNum),
+    ]);
+
+    // Pick the first one with a direct-playable MP4/m3u8
+    const direct = [otakuRes, sokuRes, sameRes].find(isPlayableDirect);
+    if (direct) {
+      result = direct;
       break;
     }
-
-    // Try Sokuja
-    const sokuRes = await resolveFromSokuja(candTitle, epNum);
-    if (isPlayableDirect(sokuRes)) {
-      result = sokuRes;
+    // Otherwise pick any that has sources
+    const any = [otakuRes, sokuRes, sameRes].find(
+      (r) => r && Array.isArray(r.sources) && r.sources.length > 0
+    );
+    if (any) {
+      result = any;
       break;
-    }
-
-    // Try Samehadaku
-    const sameRes = await resolveFromSamehadaku(candTitle, epNum);
-    if (isPlayableDirect(sameRes)) {
-      result = sameRes;
-      break;
-    }
-  }
-
-  // Step B: If no direct MP4 found, fall back to any resolved stream
-  if (!result) {
-    for (const candTitle of candidateTitles) {
-      const sameRes = await resolveFromSamehadaku(candTitle, epNum);
-      if (sameRes && sameRes.sources && sameRes.sources.length > 0) {
-        result = sameRes;
-        break;
-      }
-      const otakuRes = await resolveFromOtakudesu(candTitle, epNum);
-      if (otakuRes && otakuRes.sources && otakuRes.sources.length > 0) {
-        result = otakuRes;
-        break;
-      }
-      const sokuRes = await resolveFromSokuja(candTitle, epNum);
-      if (sokuRes && sokuRes.sources && sokuRes.sources.length > 0) {
-        result = sokuRes;
-        break;
-      }
-      const nekoRes = await resolveFromNekopoi(candTitle, epNum);
-      if (nekoRes && nekoRes.sources && nekoRes.sources.length > 0) {
-        result = nekoRes;
-        break;
-      }
     }
   }
 
