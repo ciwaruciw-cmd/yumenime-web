@@ -79,6 +79,14 @@
         "role": "Main Character",
         "image": "https://s4.anilist.co/file/anilistcdn/character/large/b120499-2eE1xdTS1WWr.png",
         "description": "Voice Actor: Hitomi Nabatame"
+      },
+      {
+        "id": "char-1792114461890",
+        "name": "Nano",
+        "animeName": "Yumene Connect",
+        "role": "Main Character",
+        "image": "https://s4.anilist.co/file/anilistcdn/character/large/b347192-gnQUZntX8HYg.png",
+        "description": "Voice Actor: Yuu Sasahara"
       }
     ]
   }
