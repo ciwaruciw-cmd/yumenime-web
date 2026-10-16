@@ -46,7 +46,7 @@ export function AppRoutes() {
         <Route path="/anime/:id/episode/:ep" element={<WatchEpisode />} />
         <Route path="/search" element={<Search />} />
         <Route path="/browse" element={<Browse />} />
-        <Route path="/genre" element={<Browse />} />
+        <Route path="/genre" element={<Genre />} />
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
