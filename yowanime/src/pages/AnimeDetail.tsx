@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/SkeletonLoader';
 import { formatScore, formatDate, formatMinutes } from '@/utils/formatDate';
+import { resolveImageUrl } from '@/utils/imageUtils';
 import { DownloadModal } from '@/components/anime/DownloadModal';
 import type { Episode } from '@/types/episode';
 
@@ -85,7 +86,7 @@ export default function AnimeDetail() {
         {/* Background */}
         <div className="absolute inset-x-0 top-0 h-[420px] sm:h-[460px] md:inset-0 md:h-full overflow-hidden bg-[#0a0a0a]">
           <img
-            src={anime.banner ?? anime.poster}
+            src={resolveImageUrl(anime.banner || anime.poster)}
             alt=""
             className="w-full h-full object-cover object-center opacity-70 md:opacity-50"
             aria-hidden="true"
@@ -107,7 +108,7 @@ export default function AnimeDetail() {
             <div className="hidden md:block shrink-0">
               {!imgError ? (
                 <img
-                  src={anime.poster}
+                  src={resolveImageUrl(anime.poster || anime.banner)}
                   alt={anime.title}
                   className="w-48 sm:w-56 md:w-full rounded-[12px] border border-white/10 shadow-2xl object-cover aspect-[2/3]"
                   referrerPolicy="no-referrer"

@@ -4,8 +4,8 @@
   "lastError": null,
   "totalRuns": 32,
   "totalSuccess": 28,
-  "isRunning": true,
+  "isRunning": false,
   "nextScheduled": "2026-10-08T11:39:10.749Z",
   "lastDuration": "28s",
-  "pid": 91669
+  "pid": null
 }

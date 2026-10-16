@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { Badge } from '@/components/ui/Badge';
@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { useWatchlistStore } from '@/store/useWatchlistStore';
 import { useActionSheetStore } from '@/store/useActionSheetStore';
 import { formatScore } from '@/utils/formatDate';
+import { resolveImageUrl } from '@/utils/imageUtils';
 import type { Anime } from '@/types/anime';
 
 interface AnimeCardProps {
@@ -21,10 +22,27 @@ interface AnimeCardProps {
  * Desktop: Rich card with hover preview and quick watch buttons.
  */
 export function AnimeCard({ anime, className, compact = false }: AnimeCardProps) {
+  const [imgSrc, setImgSrc] = useState(() => resolveImageUrl(anime.poster || anime.banner));
   const [imgError, setImgError] = useState(false);
   const { toggle, isInWatchlist } = useWatchlistStore();
   const { openMenu } = useActionSheetStore();
   const inWatchlist = isInWatchlist(anime.id);
+
+  useEffect(() => {
+    setImgSrc(resolveImageUrl(anime.poster || anime.banner));
+    setImgError(false);
+  }, [anime.poster, anime.banner, anime.id]);
+
+  const handleImgError = () => {
+    const rawTarget = anime.poster || anime.banner;
+    if (rawTarget && !imgSrc.includes('/api/proxy/image')) {
+      setImgSrc(`/api/proxy/image?url=${encodeURIComponent(rawTarget)}`);
+    } else if (anime.banner && imgSrc !== resolveImageUrl(anime.banner)) {
+      setImgSrc(resolveImageUrl(anime.banner));
+    } else {
+      setImgError(true);
+    }
+  };
 
   const statusColors: Record<string, 'success' | 'sunset' | 'outline'> = {
     ongoing: 'success',
@@ -59,10 +77,10 @@ export function AnimeCard({ anime, className, compact = false }: AnimeCardProps)
         >
           {!imgError ? (
             <img
-              src={anime.poster}
+              src={imgSrc}
               alt={anime.title}
               className="w-full h-full object-cover md:transition-transform md:duration-300 md:group-hover:scale-105"
-              onError={() => setImgError(true)}
+              onError={handleImgError}
               referrerPolicy="no-referrer"
               loading="lazy"
               decoding="async"

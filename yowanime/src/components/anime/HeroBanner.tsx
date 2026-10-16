@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { useWatchlistStore } from '@/store/useWatchlistStore';
+import { resolveImageUrl } from '@/utils/imageUtils';
 import type { Anime } from '@/types/anime';
 
 interface HeroBannerProps {
@@ -78,7 +79,7 @@ export function HeroBanner({ anime: singleAnime, animes = [] }: HeroBannerProps)
       <div className="absolute inset-0 bg-black">
         <img
           key={activeAnime.id}
-          src={activeAnime.posterHD || activeAnime.poster || activeAnime.banner}
+          src={resolveImageUrl(activeAnime.posterHD || activeAnime.poster || activeAnime.banner)}
           alt={activeAnime.title}
           className="w-full h-full object-cover object-top sm:object-center md:hidden transition-opacity duration-700 opacity-80"
           fetchPriority="high"
@@ -88,7 +89,7 @@ export function HeroBanner({ anime: singleAnime, animes = [] }: HeroBannerProps)
         />
         <img
           key={`${activeAnime.id}-desk`}
-          src={activeAnime.banner || activeAnime.posterHD || activeAnime.poster}
+          src={resolveImageUrl(activeAnime.banner || activeAnime.posterHD || activeAnime.poster)}
           alt={activeAnime.title}
           className="hidden md:block w-full h-full object-cover object-center transition-opacity duration-700 opacity-60"
           fetchPriority="high"

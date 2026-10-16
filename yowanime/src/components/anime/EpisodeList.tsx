@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { formatDuration } from '@/utils/formatDate';
 import { useHistoryStore } from '@/store/useHistoryStore';
+import { resolveImageUrl } from '@/utils/imageUtils';
 import type { Episode } from '@/types/episode';
 
 interface EpisodeListProps {
@@ -80,7 +81,7 @@ export function EpisodeList({
             {!compact && (
               <div className="shrink-0 w-20 h-12 rounded overflow-hidden bg-canvas-mid relative border border-white/5">
                 <img
-                  src={ep.thumbnail || animePoster || ''}
+                  src={resolveImageUrl(ep.thumbnail || animePoster || '')}
                   alt={ep.title || `Episode ${ep.number}`}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
                   loading="lazy"

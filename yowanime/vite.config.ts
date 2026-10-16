@@ -954,8 +954,15 @@ function apiDevPlugin(): Plugin {
                 (e: any) => e.animeId === animeId || e.animeId === slug
               );
             }
+            const mapEp = (e: any) => {
+              if (!e) return e;
+              const thumbnail = e.thumbnail && e.thumbnail.includes('nekopoi.care') && !e.thumbnail.startsWith('/api/proxy/image')
+                ? `/api/proxy/image?url=${encodeURIComponent(e.thumbnail)}`
+                : e.thumbnail;
+              return { ...e, thumbnail };
+            };
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify(result));
+            res.end(JSON.stringify(result.map(mapEp)));
           } catch (err: any) {
             res.statusCode = 500;
             res.setHeader('Content-Type', 'application/json');
@@ -984,12 +991,23 @@ function apiDevPlugin(): Plugin {
 
             let result = all;
 
+            const mapWithProxy = (a: any) => {
+              if (!a) return a;
+              const poster = a.poster && a.poster.includes('nekopoi.care') && !a.poster.startsWith('/api/proxy/image')
+                ? `/api/proxy/image?url=${encodeURIComponent(a.poster)}`
+                : a.poster;
+              const banner = a.banner && a.banner.includes('nekopoi.care') && !a.banner.startsWith('/api/proxy/image')
+                ? `/api/proxy/image?url=${encodeURIComponent(a.banner)}`
+                : (a.banner || poster);
+              return { ...a, poster, banner };
+            };
+
             // Direct slug/id lookup if requested without broad filters
             if (slug && !genre && !search && !status) {
               const exact = all.filter((a: any) => a.slug === slug || a.id === slug);
               if (exact.length > 0) {
                 res.setHeader('Content-Type', 'application/json');
-                res.end(JSON.stringify(exact));
+                res.end(JSON.stringify(exact.map(mapWithProxy)));
                 return;
               }
             }
@@ -1058,14 +1076,14 @@ function apiDevPlugin(): Plugin {
 
             if (!isPaginated) {
               res.setHeader('Content-Type', 'application/json');
-              res.end(JSON.stringify(result));
+              res.end(JSON.stringify(result.map(mapWithProxy)));
               return;
             }
 
             const page = Math.max(1, parseInt(pageStr || '1', 10));
             const pageSize = Math.max(1, parseInt(pageSizeStr || '24', 10));
             const total = result.length;
-            const paginated = result.slice((page - 1) * pageSize, page * pageSize);
+            const paginated = result.slice((page - 1) * pageSize, page * pageSize).map(mapWithProxy);
 
             res.setHeader('Content-Type', 'application/json');
             res.end(JSON.stringify({
@@ -1278,6 +1296,78 @@ function apiDevPlugin(): Plugin {
             pReq.on('error', (err) => {
               res.statusCode = 502;
               res.end(`Proxy error: ${err.message}`);
+            });
+          } catch (err: any) {
+            res.statusCode = 400;
+            res.end(`Invalid target URL: ${err.message}`);
+          }
+          return;
+        }
+
+        // GET or HEAD /api/proxy/image?url=...
+        if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/api/proxy/image') {
+          const rawTarget = url.searchParams.get('url');
+          if (!rawTarget) {
+            res.statusCode = 400;
+            res.end('Missing url param');
+            return;
+          }
+
+          const targetUrl = decodeURIComponent(rawTarget);
+          try {
+            const u = new URL(targetUrl);
+            const isNekopoi = u.hostname.includes('nekopoi');
+            const client = targetUrl.startsWith('https') ? https : http;
+
+            const reqOpts: any = {
+              method: req.method,
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Referer': `${u.protocol}//${u.host}/`,
+                'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+              },
+              rejectUnauthorized: false,
+            };
+
+            if (isNekopoi) {
+              reqOpts.host = '104.21.14.33';
+              reqOpts.servername = 'nekopoi.care';
+              reqOpts.path = u.pathname + u.search;
+              reqOpts.headers['Host'] = 'nekopoi.care';
+            }
+
+            const onRes = (pRes: any) => {
+              if (pRes.statusCode && pRes.statusCode >= 300 && pRes.statusCode < 400 && pRes.headers.location) {
+                let redir = pRes.headers.location;
+                if (redir.startsWith('/')) redir = `${u.protocol}//${u.host}${redir}`;
+                res.writeHead(302, { Location: `/api/proxy/image?url=${encodeURIComponent(redir)}` });
+                res.end();
+                return;
+              }
+
+              res.statusCode = pRes.statusCode || 200;
+              res.setHeader('Content-Type', pRes.headers['content-type'] || 'image/jpeg');
+              res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+              res.setHeader('Access-Control-Allow-Origin', '*');
+              if (req.method === 'HEAD') {
+                res.end();
+                return;
+              }
+              pRes.pipe(res);
+            };
+
+            const pReq = isNekopoi
+              ? https.get(reqOpts, onRes)
+              : client.get(targetUrl, reqOpts, onRes);
+
+            pReq.on('error', (err) => {
+              res.statusCode = 502;
+              res.end(`Image proxy error: ${err.message}`);
+            });
+            pReq.setTimeout(10000, () => {
+              pReq.destroy();
+              res.statusCode = 504;
+              res.end('Image proxy timeout');
             });
           } catch (err: any) {
             res.statusCode = 400;

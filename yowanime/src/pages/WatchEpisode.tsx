@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/SkeletonLoader';
 import { Badge } from '@/components/ui/Badge';
 import { formatScore, formatDuration } from '@/utils/formatDate';
 import { resolveEpisodeStream } from '@/services/animeService';
+import { resolveImageUrl } from '@/utils/imageUtils';
 import { DownloadModal } from '@/components/anime/DownloadModal';
 import type { Episode, VideoSource } from '@/types/episode';
 
@@ -416,7 +417,7 @@ export default function WatchEpisode() {
                 {/* Thumbnail / Number badge */}
                 <div className="relative shrink-0 w-16 h-10 rounded-[6px] overflow-hidden bg-black border border-white/10">
                   <img
-                    src={item.thumbnail || anime.poster}
+                    src={resolveImageUrl(item.thumbnail || anime.poster)}
                     alt=""
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     loading="lazy"

@@ -13,6 +13,7 @@ import {
   fetchAniListById,
   fetchAniListEpisodes,
 } from '@/services/anilistService';
+import { resolveImageUrl } from '@/utils/imageUtils';
 
 // Lazy loader for mock dataset: only loaded when user is completely offline
 let _cachedMockAnimes: Anime[] | null = null;
@@ -63,7 +64,11 @@ export async function getAnimeList(params: AnimeFilterParams = {}): Promise<Anim
         const json = await res.json();
         if (json && Array.isArray(json.data) && json.data.length > 0) {
           return {
-            data: json.data,
+            data: json.data.map((a: any) => ({
+              ...a,
+              poster: resolveImageUrl(a.poster),
+              banner: resolveImageUrl(a.banner || a.poster),
+            })),
             total: json.total || json.data.length,
             page,
             pageSize,
@@ -160,7 +165,12 @@ export async function getAnimeById(idOrSlug: string): Promise<Anime | null> {
       if (res.ok) {
         const list = await res.json();
         if (Array.isArray(list) && list.length > 0) {
-          return list[0];
+          const item = list[0];
+          return {
+            ...item,
+            poster: resolveImageUrl(item.poster),
+            banner: resolveImageUrl(item.banner || item.poster),
+          };
         }
       }
     } catch {}

@@ -456,7 +456,14 @@ app.get('/api/scraped/episodes', (req, res) => {
         (e) => e.animeId === animeId || e.animeId === slug
       );
     }
-    res.json(result);
+    const mapEp = (e) => {
+      if (!e) return e;
+      const thumbnail = e.thumbnail && e.thumbnail.includes('nekopoi.care') && !e.thumbnail.startsWith('/api/proxy/image')
+        ? `/api/proxy/image?url=${encodeURIComponent(e.thumbnail)}`
+        : e.thumbnail;
+      return { ...e, thumbnail };
+    };
+    res.json(result.map(mapEp));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -486,9 +493,20 @@ app.get('/api/scraped/animes', (req, res) => {
 
     let result = all;
 
+    const mapWithProxy = (a) => {
+      if (!a) return a;
+      const poster = a.poster && a.poster.includes('nekopoi.care') && !a.poster.startsWith('/api/proxy/image')
+        ? `/api/proxy/image?url=${encodeURIComponent(a.poster)}`
+        : a.poster;
+      const banner = a.banner && a.banner.includes('nekopoi.care') && !a.banner.startsWith('/api/proxy/image')
+        ? `/api/proxy/image?url=${encodeURIComponent(a.banner)}`
+        : (a.banner || poster);
+      return { ...a, poster, banner };
+    };
+
     if (slug && !genre && !search && !status) {
       const exact = all.filter((a) => a.slug === slug || a.id === slug);
-      if (exact.length > 0) return res.json(exact);
+      if (exact.length > 0) return res.json(exact.map(mapWithProxy));
     }
 
     const isAdultGenre = ['hentai', 'yuri'].includes(String(genre).toLowerCase());
@@ -546,13 +564,13 @@ app.get('/api/scraped/animes', (req, res) => {
     }
 
     if (!isPaginated) {
-      return res.json(result);
+      return res.json(result.map(mapWithProxy));
     }
 
     const page = Math.max(1, parseInt(pageStr || '1', 10));
     const pageSize = Math.max(1, parseInt(pageSizeStr || '24', 10));
     const total = result.length;
-    const paginated = result.slice((page - 1) * pageSize, page * pageSize);
+    const paginated = result.slice((page - 1) * pageSize, page * pageSize).map(mapWithProxy);
 
     res.json({
       data: paginated,
@@ -1266,6 +1284,62 @@ app.post('/api/admin/scraper/run', authenticateToken, requireAdmin, async (req, 
 app.post('/api/admin/scraper/reset', authenticateToken, requireAdmin, (_req, res) => {
   const status = resetScrapeStatus();
   res.json({ message: 'Status scraper berhasil di-reset.', status });
+// ── Image Proxy Endpoint (Bypasses ISP DNS blocking for Nekopoi/Otakudesu covers) ──
+// GET /api/proxy/image?url=...
+app.get('/api/proxy/image', (req, res) => {
+  const rawTarget = req.query.url;
+  if (!rawTarget) return res.status(400).send('Missing url param');
+
+  const targetUrl = decodeURIComponent(String(rawTarget));
+  try {
+    const u = new URL(targetUrl);
+    const isNekopoi = u.hostname.includes('nekopoi');
+    const client = targetUrl.startsWith('https') ? https : http;
+
+    const reqOpts = {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Referer': `${u.protocol}//${u.host}/`,
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      },
+      rejectUnauthorized: false,
+    };
+
+    if (isNekopoi) {
+      reqOpts.host = '104.21.14.33';
+      reqOpts.servername = 'nekopoi.care';
+      reqOpts.path = u.pathname + u.search;
+      reqOpts.headers['Host'] = 'nekopoi.care';
+    }
+
+    const onRes = (pRes) => {
+      if (pRes.statusCode && pRes.statusCode >= 300 && pRes.statusCode < 400 && pRes.headers.location) {
+        let redir = pRes.headers.location;
+        if (redir.startsWith('/')) redir = `${u.protocol}//${u.host}${redir}`;
+        return res.redirect(`/api/proxy/image?url=${encodeURIComponent(redir)}`);
+      }
+
+      res.status(pRes.statusCode || 200);
+      res.setHeader('Content-Type', pRes.headers['content-type'] || 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      pRes.pipe(res);
+    };
+
+    const pReq = isNekopoi
+      ? https.get(reqOpts, onRes)
+      : client.get(targetUrl, reqOpts, onRes);
+
+    pReq.on('error', (err) => {
+      res.status(502).send(`Image proxy error: ${err.message}`);
+    });
+    pReq.setTimeout(10000, () => {
+      pReq.destroy();
+      res.status(504).send('Image proxy timeout');
+    });
+  } catch (err) {
+    res.status(400).send(`Invalid target URL: ${err.message}`);
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
