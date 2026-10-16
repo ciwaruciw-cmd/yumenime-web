@@ -861,6 +861,8 @@ function apiDevPlugin(): Plugin {
               `same-${animeId}`,
               `sokuja-${slug}`,
               `sokuja-${animeId}`,
+              `nekopoi-${slug}`,
+              `nekopoi-${animeId}`,
             ].filter(Boolean);
 
             for (const candId of idCandidates) {
@@ -962,25 +964,117 @@ function apiDevPlugin(): Plugin {
           return;
         }
 
-        // GET /api/scraped/animes?slug=&title= (Served from in-memory cache)
+        // GET /api/scraped/animes?slug=&title=&genre=&status=&sort=&hasEpisodes=&page=&pageSize=
         if (req.method === 'GET' && url.pathname === '/api/scraped/animes') {
           try {
             const slug = url.searchParams.get('slug') || '';
             const title = url.searchParams.get('title') || '';
+            const genre = url.searchParams.get('genre') || '';
+            const status = url.searchParams.get('status') || '';
+            const year = url.searchParams.get('year') || '';
+            const sort = url.searchParams.get('sort') || '';
+            const search = url.searchParams.get('search') || '';
+            const hasEpisodesParam = url.searchParams.get('hasEpisodes');
+            const pageStr = url.searchParams.get('page');
+            const pageSizeStr = url.searchParams.get('pageSize');
+            const isPaginated = pageStr !== null || pageSizeStr !== null || Boolean(genre) || sort === 'latest' || url.searchParams.has('format');
+
             const all = getCachedAnimes();
+            const { map: epMap } = getCachedEpisodes();
+
             let result = all;
-            if (slug || title) {
-              const q = (slug || title).toLowerCase();
-              result = all.filter(
-                (a: any) =>
-                  a.slug === slug ||
-                  a.id === slug ||
-                  (a.title && a.title.toLowerCase().includes(q)) ||
-                  (a.slug && a.slug.includes(q))
+
+            // Direct slug/id lookup if requested without broad filters
+            if (slug && !genre && !search && !status) {
+              const exact = all.filter((a: any) => a.slug === slug || a.id === slug);
+              if (exact.length > 0) {
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify(exact));
+                return;
+              }
+            }
+
+            // Adult / Hentai filtering
+            const isAdultGenre = ['hentai', 'yuri'].includes(genre.toLowerCase());
+            if (!isAdultGenre) {
+              result = result.filter((a: any) => !(a.genres || []).includes('Hentai') && a.rating !== '18+');
+            } else if (genre.toLowerCase() === 'hentai') {
+              result = result.filter((a: any) => (a.genres || []).some((g: string) => g.toLowerCase() === 'hentai') || a.rating === '18+');
+            }
+
+            // Genre filter
+            if (genre && genre.toLowerCase() !== 'hentai') {
+              const gLower = genre.toLowerCase();
+              result = result.filter((a: any) => (a.genres || []).some((g: string) => g.toLowerCase() === gLower));
+            }
+
+            // Status filter
+            if (status) {
+              result = result.filter((a: any) => a.status === status);
+            }
+
+            // Year filter
+            if (year) {
+              result = result.filter((a: any) => String(a.year) === String(year));
+            }
+
+            // Search filter
+            const query = (search || title || '').toLowerCase().trim();
+            if (query) {
+              result = result.filter((a: any) =>
+                (a.title && a.title.toLowerCase().includes(query)) ||
+                (a.titleEnglish && a.titleEnglish.toLowerCase().includes(query)) ||
+                (a.slug && a.slug.toLowerCase().includes(query))
               );
             }
+
+            // Filter anime with real episodes
+            const hasEpisodes = hasEpisodesParam === 'true' || sort === 'latest' || isAdultGenre;
+            if (hasEpisodes) {
+              result = result.filter((a: any) => (epMap.get(a.id)?.length || 0) > 0 || (a.episodes && a.episodes > 0));
+            }
+
+            // Sort logic: Always place anime that have actual episodes FIRST in latest & popular!
+            if (sort === 'score' || sort === 'popular') {
+              result.sort((a: any, b: any) => {
+                const epA = (epMap.get(a.id)?.length || 0) > 0 || (a.episodes && a.episodes > 0) ? 1 : 0;
+                const epB = (epMap.get(b.id)?.length || 0) > 0 || (b.episodes && b.episodes > 0) ? 1 : 0;
+                if (epA !== epB) return epB - epA;
+                return (b.score || 0) - (a.score || 0);
+              });
+            } else if (sort === 'title') {
+              result.sort((a: any, b: any) => (a.title || '').localeCompare(b.title || ''));
+            } else {
+              // 'latest' or default: prioritize anime that have actual episodes, then sort by newest updatedAt
+              result.sort((a: any, b: any) => {
+                const epA = (epMap.get(a.id)?.length || 0) > 0 || (a.episodes && a.episodes > 0) ? 1 : 0;
+                const epB = (epMap.get(b.id)?.length || 0) > 0 || (b.episodes && b.episodes > 0) ? 1 : 0;
+                if (epA !== epB) return epB - epA;
+                const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+                const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+                return timeB - timeA;
+              });
+            }
+
+            if (!isPaginated) {
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify(result));
+              return;
+            }
+
+            const page = Math.max(1, parseInt(pageStr || '1', 10));
+            const pageSize = Math.max(1, parseInt(pageSizeStr || '24', 10));
+            const total = result.length;
+            const paginated = result.slice((page - 1) * pageSize, page * pageSize);
+
             res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify(result));
+            res.end(JSON.stringify({
+              data: paginated,
+              total,
+              page,
+              pageSize,
+              hasMore: page * pageSize < total,
+            }));
           } catch (err: any) {
             res.statusCode = 500;
             res.setHeader('Content-Type', 'application/json');

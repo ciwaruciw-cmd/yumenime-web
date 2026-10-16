@@ -37,7 +37,46 @@ async function getMockAnimes(): Promise<Anime[]> {
 export async function getAnimeList(params: AnimeFilterParams = {}): Promise<AnimeListResponse> {
   const page = params.page ?? 1;
   const pageSize = params.pageSize ?? 24;
+  const isAdultGenre = ['hentai', 'yuri'].includes(params.genre?.toLowerCase() ?? '');
+  const isLatest = params.sort === 'latest' || !params.sort;
 
+  // 1. Prioritaskan anime yang SUDAH ADA EPISODE-NYA (dari database scraper)
+  // Terutama untuk:
+  // - Kategori Hentai (semua 1.059 anime Nekopoi memiliki episode aktif; AniList punya 0 episode)
+  // - Mode sort 'latest' ("anime yg udah ada epsd nya taroh di latest biar gampang nonton nya")
+  if (isAdultGenre || isLatest) {
+    try {
+      const q = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize),
+        sort: params.sort || 'latest',
+        hasEpisodes: 'true',
+      });
+      if (params.genre) q.set('genre', params.genre);
+      if (params.status) q.set('status', params.status);
+      if (params.year) q.set('year', String(params.year));
+      if (params.type) q.set('type', params.type);
+      if (params.search) q.set('search', params.search);
+
+      const res = await fetch(`/api/scraped/animes?${q.toString()}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json && Array.isArray(json.data) && json.data.length > 0) {
+          return {
+            data: json.data,
+            total: json.total || json.data.length,
+            page,
+            pageSize,
+            hasMore: Boolean(json.hasMore),
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('[animeService] Scraped animes API error, falling back:', err);
+    }
+  }
+
+  // 2. Fallback / filter lainnya menggunakan AniList
   try {
     const res = await fetchAniListList(params);
     return {
@@ -108,7 +147,26 @@ async function getAnimeListMock(params: AnimeFilterParams): Promise<AnimeListRes
 export async function getAnimeById(idOrSlug: string): Promise<Anime | null> {
   if (!idOrSlug) return null;
 
-  // 1. Live AniList API (with instant memory & session cache)
+  const isScrapedId =
+    idOrSlug.startsWith('nekopoi-') ||
+    idOrSlug.startsWith('otaku-') ||
+    idOrSlug.startsWith('same-') ||
+    idOrSlug.startsWith('sokuja-');
+
+  // 1. Jika ID jelas merupakan ID anime hasil scrape (Nekopoi / Otakudesu / dll), langsung cari di database lokal
+  if (isScrapedId) {
+    try {
+      const res = await fetch(`/api/scraped/animes?slug=${encodeURIComponent(idOrSlug)}`);
+      if (res.ok) {
+        const list = await res.json();
+        if (Array.isArray(list) && list.length > 0) {
+          return list[0];
+        }
+      }
+    } catch {}
+  }
+
+  // 2. Live AniList API (with instant memory & session cache)
   try {
     const liveAnime = await fetchAniListById(idOrSlug);
     if (liveAnime) return liveAnime;
@@ -116,7 +174,7 @@ export async function getAnimeById(idOrSlug: string): Promise<Anime | null> {
     console.warn('[animeService] AniList detail error, falling back:', err);
   }
 
-  // 2. Fallback to scraped anime database
+  // 3. Fallback to scraped anime database
   try {
     const res = await fetch(`/api/scraped/animes?slug=${encodeURIComponent(idOrSlug)}`);
     if (res.ok) {

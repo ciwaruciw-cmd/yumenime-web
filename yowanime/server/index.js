@@ -375,6 +375,8 @@ app.get('/api/scraped/match', (req, res) => {
       `same-${animeId}`,
       `sokuja-${slug}`,
       `sokuja-${animeId}`,
+      `nekopoi-${slug}`,
+      `nekopoi-${animeId}`,
     ].filter(Boolean);
 
     for (const candId of idCandidates) {
@@ -460,24 +462,105 @@ app.get('/api/scraped/episodes', (req, res) => {
   }
 });
 
-// GET /api/scraped/animes?slug=&title=
+// GET /api/scraped/animes?slug=&title=&genre=&status=&sort=&hasEpisodes=&page=&pageSize=
 app.get('/api/scraped/animes', (req, res) => {
   try {
     const slug = req.query.slug || '';
     const title = req.query.title || '';
+    const genre = req.query.genre || '';
+    const status = req.query.status || '';
+    const year = req.query.year || '';
+    const sort = req.query.sort || '';
+    const search = req.query.search || '';
+    const hasEpisodesParam = req.query.hasEpisodes;
+    const pageStr = req.query.page;
+    const pageSizeStr = req.query.pageSize;
+    const isPaginated = pageStr !== undefined || pageSizeStr !== undefined || Boolean(genre) || sort === 'latest' || req.query.format !== undefined;
+
     const all = getScrapedAnimes();
+    const allEps = getScrapedEpisodes();
+    const epCountMap = new Map();
+    for (const ep of allEps) {
+      if (ep.animeId) epCountMap.set(ep.animeId, (epCountMap.get(ep.animeId) || 0) + 1);
+    }
+
     let result = all;
-    if (slug || title) {
-      const q = String(slug || title).toLowerCase();
-      result = all.filter(
-        (a) =>
-          a.slug === slug ||
-          a.id === slug ||
-          (a.title && a.title.toLowerCase().includes(q)) ||
-          (a.slug && a.slug.includes(q))
+
+    if (slug && !genre && !search && !status) {
+      const exact = all.filter((a) => a.slug === slug || a.id === slug);
+      if (exact.length > 0) return res.json(exact);
+    }
+
+    const isAdultGenre = ['hentai', 'yuri'].includes(String(genre).toLowerCase());
+    if (!isAdultGenre) {
+      result = result.filter((a) => !(a.genres || []).includes('Hentai') && a.rating !== '18+');
+    } else if (String(genre).toLowerCase() === 'hentai') {
+      result = result.filter((a) => (a.genres || []).some((g) => g.toLowerCase() === 'hentai') || a.rating === '18+');
+    }
+
+    if (genre && String(genre).toLowerCase() !== 'hentai') {
+      const gLower = String(genre).toLowerCase();
+      result = result.filter((a) => (a.genres || []).some((g) => g.toLowerCase() === gLower));
+    }
+
+    if (status) {
+      result = result.filter((a) => a.status === status);
+    }
+
+    if (year) {
+      result = result.filter((a) => String(a.year) === String(year));
+    }
+
+    const query = String(search || title || '').toLowerCase().trim();
+    if (query) {
+      result = result.filter((a) =>
+        (a.title && a.title.toLowerCase().includes(query)) ||
+        (a.titleEnglish && a.titleEnglish.toLowerCase().includes(query)) ||
+        (a.slug && a.slug.toLowerCase().includes(query))
       );
     }
-    res.json(result);
+
+    const hasEpisodes = hasEpisodesParam === 'true' || sort === 'latest' || isAdultGenre;
+    if (hasEpisodes) {
+      result = result.filter((a) => (epCountMap.get(a.id) || 0) > 0 || (a.episodes && a.episodes > 0));
+    }
+
+    if (sort === 'score' || sort === 'popular') {
+      result.sort((a, b) => {
+        const epA = (epCountMap.get(a.id) || 0) > 0 || (a.episodes && a.episodes > 0) ? 1 : 0;
+        const epB = (epCountMap.get(b.id) || 0) > 0 || (b.episodes && b.episodes > 0) ? 1 : 0;
+        if (epA !== epB) return epB - epA;
+        return (b.score || 0) - (a.score || 0);
+      });
+    } else if (sort === 'title') {
+      result.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+    } else {
+      result.sort((a, b) => {
+        const epA = (epCountMap.get(a.id) || 0) > 0 || (a.episodes && a.episodes > 0) ? 1 : 0;
+        const epB = (epCountMap.get(b.id) || 0) > 0 || (b.episodes && b.episodes > 0) ? 1 : 0;
+        if (epA !== epB) return epB - epA;
+        const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+        const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+        return timeB - timeA;
+      });
+    }
+
+    if (!isPaginated) {
+      return res.json(result);
+    }
+
+    const page = Math.max(1, parseInt(pageStr || '1', 10));
+    const pageSize = Math.max(1, parseInt(pageSizeStr || '24', 10));
+    const total = result.length;
+    const paginated = result.slice((page - 1) * pageSize, page * pageSize);
+
+    res.json({
+      data: paginated,
+      total,
+      page,
+      pageSize,
+      hasMore: page * pageSize < total,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
