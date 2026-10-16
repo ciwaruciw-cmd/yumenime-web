@@ -1,211 +1,13 @@
-import { useState, useEffect, useMemo, useRef, type ReactElement } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { AnimeCard } from '@/components/anime/AnimeCard';
 import { getAnimeList } from '@/services/animeService';
+import { GENRE_ITEMS } from '@/data/genres';
+import { AgeVerificationModal } from '@/components/common/AgeVerificationModal';
 import type { Anime, AnimeFilterParams, AnimeGenre } from '@/types/anime';
 
 type BrowseTab = 'all' | 'simulcasts' | 'genres' | 'music';
-
-interface GenreItem {
-  name: string;
-  label: string;
-  image: string;
-  icon: (props: { className?: string }) => ReactElement;
-}
-
-const GENRE_LIST: GenreItem[] = [
-  {
-    name: 'Action',
-    label: 'ACTION',
-    image: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fbanner%2F101922-WBsBl0ClmgL1.jpg&w=400&output=webp',
-    icon: ({ className = 'w-5 h-5' }) => (
-      <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2c-.3 1.5-1.2 2.8-2.3 3.8C8.5 7 7.5 8.7 7.5 10.7c0 2.8 2.2 5 5 5s5-2.2 5-5c0-1.8-.8-3.4-2.1-4.6-.2 1.3-.9 2.4-2 3.1-.2-.6-.4-1.2-.4-1.8 0-1.7.9-3.2 2-4.2C13.8 2.4 12.8 2 12 2zm-1.5 15.5c-2.5 0-4.5 2-4.5 4.5h12c0-2.5-2-4.5-4.5-4.5-1 0-1.9.3-2.6.9-.1-.6-.2-1.2-.4-1.9z" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Adventure',
-    label: 'ADVENTURE',
-    image: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fbanner%2F21-wf37VakJSpdH.jpg&w=400&output=webp',
-    icon: ({ className = 'w-5 h-5' }) => (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10" />
-        <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" fill="currentColor" stroke="none" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Comedy',
-    label: 'COMEDY',
-    image: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fbanner%2F21202-bO8JjQd6V9jV.jpg&w=400&output=webp',
-    icon: ({ className = 'w-5 h-5' }) => (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z" />
-        <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-        <line x1="9" y1="9" x2="9.01" y2="9" strokeWidth="3" />
-        <line x1="15" y1="9" x2="15.01" y2="9" strokeWidth="3" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Drama',
-    label: 'DRAMA',
-    image: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fbanner%2F21827-t2j20rNdfMZe.jpg&w=400&output=webp',
-    icon: ({ className = 'w-5 h-5' }) => (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-        <path d="m12 5-1 4 3 2-2 4" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Fantasy',
-    label: 'FANTASY',
-    image: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fbanner%2F154587-gviZldih8Unl.jpg&w=400&output=webp',
-    icon: ({ className = 'w-5 h-5' }) => (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="14.5 17.5 3 6 3 3 6 3 17.5 14.5" />
-        <line x1="13" y1="19" x2="19" y2="13" />
-        <line x1="16" y1="16" x2="20" y2="20" />
-        <line x1="19" y1="21" x2="21" y2="19" />
-        <polyline points="14.5 6.5 18 3 21 3 21 6 17.5 9.5" />
-        <line x1="5" y1="14" x2="9" y2="18" />
-        <line x1="7" y1="17" x2="4" y2="20" />
-        <line x1="3" y1="19" x2="5" y2="21" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Music',
-    label: 'MUSIC',
-    image: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fbanner%2F130003-O0y430l8b81U.jpg&w=400&output=webp',
-    icon: ({ className = 'w-5 h-5' }) => (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M9 18V5l12-2v13" />
-        <circle cx="6" cy="18" r="3" fill="currentColor" />
-        <circle cx="18" cy="16" r="3" fill="currentColor" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Romance',
-    label: 'ROMANCE',
-    image: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fbanner%2F101921-G6g6bS8yA4zZ.jpg&w=400&output=webp',
-    icon: ({ className = 'w-5 h-5' }) => (
-      <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Sci-Fi',
-    label: 'SCI-FI',
-    image: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fbanner%2F9253-mDb4eC95Z1jO.jpg&w=400&output=webp',
-    icon: ({ className = 'w-5 h-5' }) => (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <ellipse cx="12" cy="12" rx="10" ry="4" />
-        <path d="M7 12c0-2.2 2.2-4 5-4s5 1.8 5 4" />
-        <path d="M9 16l-3 4M15 16l3 4M12 16v5" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Seinen',
-    label: 'SEINEN',
-    image: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fbanner%2F101348-1Hk12r6rUe69.jpg&w=400&output=webp',
-    icon: ({ className = 'w-5 h-5' }) => (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polygon points="12 2 2 9 12 22 22 9 12 2" />
-        <line x1="2" y1="9" x2="22" y2="9" />
-        <line x1="12" y1="2" x2="12" y2="22" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Shoujo',
-    label: 'SHOJO',
-    image: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fbanner%2F105333-eWfH3eJv0WjW.jpg&w=400&output=webp',
-    icon: ({ className = 'w-5 h-5' }) => (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-        <path d="M12 8v4M10 10h4" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Shounen',
-    label: 'SHONEN',
-    image: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fbanner%2F97940-bU124K3f15pL.jpg&w=400&output=webp',
-    icon: ({ className = 'w-5 h-5' }) => (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M11 11V4.5a1.5 1.5 0 0 1 3 0V10" />
-        <path d="M14 8.5a1.5 1.5 0 0 1 3 0V11" />
-        <path d="M17 10a1.5 1.5 0 0 1 3 0v4a6 6 0 0 1-6 6H9a5 5 0 0 1-5-5v-3.5a1.5 1.5 0 0 1 3 0V14" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Slice of Life',
-    label: 'SLICE OF LIFE',
-    image: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fbanner%2F98444-Yt34o5h6hWvG.jpg&w=400&output=webp',
-    icon: ({ className = 'w-5 h-5' }) => (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-        <line x1="16" y1="2" x2="16" y2="6" />
-        <line x1="8" y1="2" x2="8" y2="6" />
-        <line x1="3" y1="10" x2="21" y2="10" />
-        <text x="12" y="18" textAnchor="middle" fontSize="7" fill="currentColor" stroke="none" fontWeight="bold">18</text>
-      </svg>
-    ),
-  },
-  {
-    name: 'Supernatural',
-    label: 'SUPERNATURAL',
-    image: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fbanner%2F101280-M9J6m95q08Wq.jpg&w=400&output=webp',
-    icon: ({ className = 'w-5 h-5' }) => (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 2l3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7z" fill="currentColor" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Mystery',
-    label: 'MYSTERY',
-    image: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fbanner%2F1535-6jR384n4vJ1w.jpg&w=400&output=webp',
-    icon: ({ className = 'w-5 h-5' }) => (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="11" cy="11" r="8" />
-        <line x1="21" y1="21" x2="16.65" y2="16.65" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Sports',
-    label: 'SPORTS',
-    image: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fbanner%2F20464-YvG43B8dZ5jL.jpg&w=400&output=webp',
-    icon: ({ className = 'w-5 h-5' }) => (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
-        <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
-        <path d="M4 22h16" />
-        <path d="M10 14.66V17c0 .55-.45 1-1 1H8c-.55 0-1 .45-1 1v1h10v-1c0-.55-.45-1-1-1h-1c-.55 0-1-.45-1-1v-2.34" />
-        <path d="M6 4h12v7a6 6 0 0 1-12 0V4z" fill="currentColor" stroke="none" />
-      </svg>
-    ),
-  },
-  {
-    name: 'Thriller',
-    label: 'THRILLER',
-    image: 'https://images.weserv.nl/?url=https%3A%2F%2Fs4.anilist.co%2Ffile%2Fanilistcdn%2Fmedia%2Fanime%2Fbanner%2F101759-Z85g1vNlK2s0.jpg&w=400&output=webp',
-    icon: ({ className = 'w-5 h-5' }) => (
-      <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-      </svg>
-    ),
-  },
-];
 
 const SEASONS = [
   'Fall 2026',
@@ -231,6 +33,10 @@ export default function Browse() {
   // Tab State
   const initialTab = (searchParams.get('tab') as BrowseTab) || 'all';
   const [activeTab, setActiveTab] = useState<BrowseTab>(initialTab);
+
+  // Age verification modal state
+  const [showAgeModal, setShowAgeModal] = useState(false);
+  const [pendingGenre, setPendingGenre] = useState<string | null>(null);
 
   // Filter & Sort State
   const [selectedSort, setSelectedSort] = useState<AnimeFilterParams['sort']>('popular');
@@ -337,8 +143,31 @@ export default function Browse() {
   };
 
   const handleSelectGenreCard = (genreName: string) => {
+    if (genreName.toLowerCase() === 'hentai') {
+      const isVerified = sessionStorage.getItem('age_verified_18') === 'true';
+      if (!isVerified) {
+        setPendingGenre(genreName);
+        setShowAgeModal(true);
+        return;
+      }
+    }
     setSelectedGenre(genreName);
     switchTab('all');
+  };
+
+  const handleConfirmAge = () => {
+    sessionStorage.setItem('age_verified_18', 'true');
+    setShowAgeModal(false);
+    if (pendingGenre) {
+      setSelectedGenre(pendingGenre);
+      switchTab('all');
+      setPendingGenre(null);
+    }
+  };
+
+  const handleCancelAge = () => {
+    setShowAgeModal(false);
+    setPendingGenre(null);
   };
 
   const currentSortLabel = SORT_OPTIONS.find((s) => s.value === selectedSort)?.label || 'Popular';
@@ -575,41 +404,35 @@ export default function Browse() {
         </div>
       )}
 
-      {/* 4. Tab 3: Anime Genres Grid (Screenshot 3) */}
+      {/* 4. Tab 3: Anime Genres Grid (Original Clean Style) */}
       {activeTab === 'genres' && (
-        <div className="max-w-[1280px] mx-auto px-4 sm:px-6 pt-3">
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-3.5">
-            {GENRE_LIST.map((g) => {
-              const Icon = g.icon;
-              return (
-                <div
-                  key={g.name}
-                  onClick={() => handleSelectGenreCard(g.name)}
-                  className="relative aspect-[16/9] sm:aspect-[16/10] rounded-[6px] overflow-hidden group cursor-pointer bg-[#141418] shadow-md transition-all active:scale-[0.98]"
-                >
-                  {/* Genre Background Artwork */}
-                  <img
-                    src={g.image}
-                    alt={g.label}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 opacity-60"
-                    loading="lazy"
-                  />
+        <div className="max-w-[1280px] mx-auto px-4 sm:px-6 pt-4 pb-12">
+          {/* Header */}
+          <div className="mb-5">
+            <span className="eyebrow-mono text-mute block mb-1 text-[11px]">BROWSE</span>
+            <h2 className="display-sm text-ink text-xl sm:text-2xl font-bold font-display">All Genres</h2>
+            <p className="text-mute text-xs sm:text-sm font-display mt-1">
+              Explore anime by your favorite genre
+            </p>
+          </div>
 
-                  {/* Dark Vignette Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/50 to-black/30" />
-
-                  {/* Centered Content: Icon + Uppercase Label */}
-                  <div className="absolute inset-0 flex flex-col items-center justify-center p-2 text-center">
-                    <div className="text-white mb-1.5 opacity-90 group-hover:opacity-100 group-hover:scale-110 transition-all">
-                      <Icon className="w-5 h-5 sm:w-6 sm:h-6" />
-                    </div>
-                    <span className="font-sans font-bold text-xs sm:text-sm tracking-wider text-white">
-                      {g.label}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+          {/* Genre grid — original clean card style with all 23 genres */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            {GENRE_ITEMS.map(({ name, slug }) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => handleSelectGenreCard(name)}
+                className="group bg-canvas-card border border-hairline/80 hover:border-sunset/50 hover:bg-canvas-soft rounded-[10px] p-4 sm:p-5 transition-all duration-200 text-left cursor-pointer active:scale-[0.98] shadow-sm flex flex-col justify-between"
+              >
+                <span className="text-sm sm:text-base font-display font-medium text-ink group-hover:text-sunset transition-colors mb-1">
+                  {name}
+                </span>
+                <span className="text-[10px] sm:text-xs font-mono text-mute uppercase tracking-wider">
+                  {slug}
+                </span>
+              </button>
+            ))}
           </div>
         </div>
       )}
@@ -699,6 +522,12 @@ export default function Browse() {
           </div>
         </div>
       )}
+      {/* 18+ Age Verification Warning Alert Modal */}
+      <AgeVerificationModal
+        isOpen={showAgeModal}
+        onConfirm={handleConfirmAge}
+        onCancel={handleCancelAge}
+      />
     </div>
   );
 }

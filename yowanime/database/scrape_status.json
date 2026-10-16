@@ -1,11 +1,11 @@
 {
-  "lastRun": "2026-10-15T22:37:52.601Z",
+  "lastRun": "2026-10-16T09:25:09.799Z",
   "lastSuccess": "2026-10-15T22:38:20.673Z",
   "lastError": null,
-  "totalRuns": 30,
+  "totalRuns": 32,
   "totalSuccess": 28,
-  "isRunning": false,
+  "isRunning": true,
   "nextScheduled": "2026-10-08T11:39:10.749Z",
   "lastDuration": "28s",
-  "pid": null
+  "pid": 91669
 }

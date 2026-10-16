@@ -10,6 +10,7 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { scrapeNekopoi } from './scrapeNekopoi.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_DIR = path.join(__dirname, '../database');
@@ -604,7 +605,7 @@ async function main() {
     console.log(`💾 [${sourceName}] Progress tersimpan: ${allAnimes.length} anime, ${allEps.length} episode total.`);
   };
 
-  let otakuCount = 0, sameCount = 0, sokujaCount = 0;
+  let otakuCount = 0, sameCount = 0, sokujaCount = 0, nekopoiCount = 0;
 
   try {
     const { animes: otakuAnimes, episodes: otakuEps } = await scrapeOtakudesu(existingAnimeMap, existingEpSet, isFull);
@@ -630,6 +631,14 @@ async function main() {
     console.error('❌ [Sokuja] Error:', err.message);
   }
 
+  try {
+    const { animes: nekopoiAnimes, episodes: nekopoiEps } = await scrapeNekopoi(existingAnimeMap, existingEpSet, isFull);
+    nekopoiCount = nekopoiEps.length;
+    saveProgress('Nekopoi', nekopoiAnimes, nekopoiEps);
+  } catch (err) {
+    console.error('❌ [Nekopoi] Error:', err.message);
+  }
+
   const finalAnimes = Array.from(existingAnimeMap.values());
   const finalEps = Array.from(existingEpMap.values());
 
@@ -639,6 +648,7 @@ async function main() {
   console.log(`   - Tambahan episode baru Otakudesu: ${otakuCount}`);
   console.log(`   - Tambahan episode baru Samehadaku: ${sameCount}`);
   console.log(`   - Tambahan episode baru Sokuja: ${sokujaCount}`);
+  console.log(`   - Tambahan episode baru Nekopoi: ${nekopoiCount}`);
   console.log(`\n📁 Tersimpan: ${ANIME_JSON}`);
   console.log(`📁 Tersimpan: ${EP_JSON}`);
   console.log('\n🎉 Scrape SELESAI!');

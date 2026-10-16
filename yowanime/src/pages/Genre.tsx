@@ -1,38 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AgeVerificationModal } from '@/components/common/AgeVerificationModal';
+import { GENRE_ITEMS } from '@/data/genres';
 
 /**
  * Genre list page — all genres as pill cards.
  * Genre list now uses Otakudesu genre slugs for navigation.
  */
-
-const GENRES = [
-  { name: 'Action', slug: 'action' },
-  { name: 'Adventure', slug: 'adventure' },
-  { name: 'Comedy', slug: 'comedy' },
-  { name: 'Drama', slug: 'drama' },
-  { name: 'Fantasy', slug: 'fantasy' },
-  { name: 'Horror', slug: 'horror' },
-  { name: 'Isekai', slug: 'isekai' },
-  { name: 'Mecha', slug: 'mecha' },
-  { name: 'Mystery', slug: 'mystery' },
-  { name: 'Romance', slug: 'romance' },
-  { name: 'Sci-Fi', slug: 'sci-fi' },
-  { name: 'Seinen', slug: 'seinen' },
-  { name: 'Shounen', slug: 'shounen' },
-  { name: 'Shoujo', slug: 'shoujo' },
-  { name: 'Slice of Life', slug: 'slice-of-life' },
-  { name: 'Sports', slug: 'sports' },
-  { name: 'Supernatural', slug: 'supernatural' },
-  { name: 'Thriller', slug: 'thriller' },
-  { name: 'Music', slug: 'music' },
-  { name: 'Psychological', slug: 'psychological' },
-  { name: 'Yuri', slug: 'yuri' },
-  { name: 'Ecchi', slug: 'ecchi' },
-  { name: 'Hentai', slug: 'hentai' },
-];
-
 export default function Genre() {
   const navigate = useNavigate();
   const [showAgeModal, setShowAgeModal] = useState(false);
@@ -58,7 +32,7 @@ export default function Genre() {
   };
 
   return (
-    <div className="page-enter pt-14 sm:pt-20 min-h-screen">
+    <div className="page-enter pt-14 sm:pt-20 pb-24 min-h-screen">
       <div className="max-w-[1280px] mx-auto px-6">
         {/* Header */}
         <div className="mb-8">
@@ -71,7 +45,7 @@ export default function Genre() {
 
         {/* Genre grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-          {GENRES.map(({ name, slug }) => (
+          {GENRE_ITEMS.map(({ name, slug }) => (
             <Link
               key={name}
               to={`/anime?genre=${encodeURIComponent(name)}`}
